@@ -113,7 +113,7 @@ SharedBall (逻辑根: 同上)
 5. 逻辑体与图形体分离：图形由 `PredictionRigidbody` 平滑器驱动，回滚不造成画面瞬移；
 6. 效果：双人同 Tick 撞球，双端轨迹一致（服务器唯一真相），预测错误在一两个 Tick 内无感修正。
 
-**实现参照**：FishNet 官方 `Examples/Prediction/Physics`——以该示例为骨架改造，不自己发明。
+**实现参照**：FishNet 官方 `Demos/Prediction/Rigidbody`（场景 `Rigidbody Prediction Demo.unity`）——以该示例为骨架改造，不自己发明。
 
 ### 4.5 输入与移动模型
 
@@ -185,10 +185,10 @@ Unity 版本：**6000.3.14f1**。
 
 | 包 | 用途 | 安装 |
 |----|------|------|
-| **FishNet 4** | 网络框架（预测/和解/RPC/Spawn） | git URL：`https://github.com/FirstGearGames/FishNet.git?path=/Assets/FishNet` |
+| **FishNet 4** | 网络框架（预测/和解/RPC/Spawn） | git URL：`https://github.com/FirstGearGames/FishNet.git?path=/Assets/FishNet#4.7.3`（锁 tag 保证评审可复现） |
 | **SteamworksSockets** | Steam transport（M4 引入，必做） | git URL：`https://github.com/FirstGearGames/SteamworksSockets.git?path=/Assets/SteamworksSockets`（URL 变动以 FishNet 官方文档 Transport 章为准） |
 | **FishySteamworks** | Steam transport 备选 | `https://github.com/FirstGearGames/FishySteamworks.git?path=/Assets/FishySteamworks` |
-| **ParrelSync** | 同机多开 Editor 测试 | `https://github.com/JoinGame/ParrelSync.git?path=/ParrelSync` |
+| **ParrelSync** | 同机多开 Editor 测试 | `https://github.com/VeriorPies/ParrelSync.git?path=/ParrelSync#1.5.3`（原 JoinGame 仓库已不存在） |
 | URP | 渲染管线 | Unity 6 模板自带 |
 
 - `steam_appid.txt`（一行 `480`）：项目根（Editor）+ Build 输出目录。
@@ -226,7 +226,7 @@ Unity 版本：**6000.3.14f1**。
 
 | 风险 | 概率 | 对策 |
 |------|------|------|
-| FishNet 预测 API 调通超预算 | 中 | M0 先跑通官方 `Examples/Prediction/Physics`，以其为骨架 |
+| FishNet 预测 API 调通超预算 | 中 | M0 先跑通官方 `Demos/Prediction/Rigidbody`，以其为骨架 |
 | 双人撞球偶发偏差 | 中 | 平滑参数调优；TickRate/物理步严格对齐；README 说明以服务器和解为准 |
 | Steam transport URL/版本变动 | 低 | 以官方文档为准；备选 FishySteamworks；P2-1 已定级必做，只替换实现方式、不裁剪功能 |
 | 时间不足 | — | 按第 6 节裁剪顺序，M0-M4 不裁 |

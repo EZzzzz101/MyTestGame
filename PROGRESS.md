@@ -60,7 +60,7 @@ M0 工程基线
 **目标**：工程可编译、可多开、目录与版本规范就位，之后所有节点都在这套基线上开工。
 
 工作项：
-- 装 FishNet 4（git URL）与 ParrelSync 到 `Packages/manifest.json`，确认包内 `Examples/Prediction/Physics` 存在（M4 的参照骨架）。
+- 装 FishNet 4（git URL，锁 tag `#4.7.3`）与 ParrelSync（`VeriorPies/ParrelSync`，锁 tag `#1.5.3`）到 `Packages/manifest.json`，确认包内 `Demos/Prediction/Rigidbody`（骨架场景 `Rigidbody Prediction Demo.unity`）存在（M3/M4 的参照骨架）。
 - 多开工具**定案：ParrelSync 为主，MPPM（com.unity.multiplayer.center）留作备选不装**。原因：MPPM 的 Local Players 多个玩家共享同一进程的静态变量，FishNet 的静态单例/管理器结构在共享进程下有冲突风险；ParrelSync 独立克隆进程隔离彻底，是 FishNet 社区验证过的方案。若后续实测 ParrelSync 克隆有包还原问题，再评估切 MPPM。
 - 建 `Assets/_Project/{Scripts/{Core,Network,Player,Ball,UI},Prefabs,Scenes,Materials}`。
 - 每个 Scripts 子目录一个 asmdef：`SphereRoom.Core / .Network / .Player / .Ball / .UI`，命名空间同名，引用 FishNet asmdef。
@@ -122,7 +122,7 @@ M0 工程基线
 - 远程玩家朝向用低频 SyncVar（yaw）仅作视觉。
 
 **完成定义**：双开下本地移动无延迟感；远程玩家位置平滑无明显抖动；服务器能拒绝异常速度。
-**风险**：以官方 `Examples/Prediction/Physics` 为骨架改造，逐行核对 API 签名。
+**风险**：以官方 `Demos/Prediction/Rigidbody` 为骨架改造，逐行核对 API 签名。
 
 ---
 

@@ -30,15 +30,15 @@
 
 ## 3. 环境与依赖
 
-manifest.json 需包含（git URL 安装，详见 DEVELOPMENT_PLAN.md 第 6 节）：
+manifest.json 需包含（git URL 安装，详见 DEVELOPMENT_PLAN.md 第 7 节）：
 
-- `FishNet`：`https://github.com/FirstGearGames/FishNet.git?path=/Assets/FishNet`
-- `SteamworksSockets`（仅 Steam 里程碑引入）：`https://github.com/FirstGearGames/SteamworksSockets.git?path=/Assets/SteamworksSockets`
-- `ParrelSync`（编辑器多开测试）：`https://github.com/JoinGame/ParrelSync.git?path=/ParrelSync`
+- `FishNet`：`https://github.com/FirstGearGames/FishNet.git?path=/Assets/FishNet#4.7.3`（锁 tag，评审方可复现）
+- `SteamworksSockets`（仅 M9 Steam 里程碑引入）：`https://github.com/FirstGearGames/SteamworksSockets.git?path=/Assets/SteamworksSockets`
+- `ParrelSync`（编辑器多开测试）：`https://github.com/VeriorPies/ParrelSync.git?path=/ParrelSync#1.5.3`（**原 JoinGame 地址仓库已不存在，官方仓库为 VeriorPies**）
 
 Steam 路径需要：项目根与 Build 目录各放 `steam_appid.txt`，内容为 `480`。
 
-**API 参考优先级**：FishNet 官方文档（fish-networking.gitbook.io）> 包内 `Examples/`（尤其 `Examples/Prediction/Physics`）> 本文档。**预测代码以官方示例为骨架改造，不得凭记忆编写 API 调用**；若 API 与本文档描述有出入，以包内示例为准并在提交信息中注明。
+**API 参考优先级**：FishNet 官方文档（fish-networking.gitbook.io）> 包内 `Demos/`（尤其 `Demos/Prediction/Rigidbody`，骨架场景 `Rigidbody Prediction Demo.unity`）> 本文档。**预测代码以官方示例为骨架改造，不得凭记忆编写 API 调用**；若 API 与本文档描述有出入，以包内示例为准并在提交信息中注明。
 
 ## 4. 目录结构（强制）
 
@@ -145,6 +145,6 @@ Assets/
 ## 9. 给代理的执行提示
 
 - 修改前先读对应模块现有代码；生成新脚本时同步更新 asmdef 引用；
-- 所有 FishNet API 调用先对照包内 `Examples/` 确认签名，不确定就打开包源码读，不要猜；
+- 所有 FishNet API 调用先对照包内 `Demos/`（预测部分见 `Demos/Prediction/Rigidbody`）确认签名，不确定就打开包源码读，不要猜；
 - 物理调参（弹性/摩擦/平滑）集中放在一个 `PhysicsTuning` 常量类，便于迭代；
 - 遇到预测不同步问题，优先检查：TickRate 与 fixedDeltaTime 是否对齐、reconcile 频率、图形平滑设置，而不是先怀疑网络。
