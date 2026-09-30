@@ -46,6 +46,9 @@ namespace SphereRoom.Player
             _lookAction = _playerActionMap.FindAction(LookActionName, true);
             _cancelAction = _actions.FindActionMap(UiMapName, true).FindAction(CancelActionName, true);
 
+            // 地图只启用一次：同一进程里可能有多个玩家对象（本地玩家 + 远端玩家），
+            // 若各自 Enable/Disable 同一份资产的 ActionMap 会互相踩。是否采信输入改由 InputEnabled 标志决定。
+            _playerActionMap.Enable();
             SetInputEnabled(false);
         }
 
@@ -61,29 +64,30 @@ namespace SphereRoom.Player
                 _cancelAction.performed -= OnCancelPerformed;
         }
 
-        /// <summary>启用/停用玩家操作。UI 地图保持启用，交给输入模块处理菜单导航。</summary>
+        /// <summary>
+        /// 标记本对象是否采信输入。只控制读取开关，不切换 ActionMap 的启停（避免与同进程其他玩家对象冲突）。
+        /// </summary>
         public void SetInputEnabled(bool value)
         {
-            if (_playerActionMap == null || InputEnabled == value)
-                return;
-
             InputEnabled = value;
-            if (value)
-                _playerActionMap.Enable();
-            else
-                _playerActionMap.Disable();
         }
 
         /// <summary>采样移动输入（0-1 摇杆域）。Tick 内调用。</summary>
         public Vector2 ReadMove()
         {
-            return _moveAction == null ? Vector2.zero : _moveAction.ReadValue<Vector2>();
+            if (!InputEnabled || _moveAction == null)
+                return Vector2.zero;
+
+            return _moveAction.ReadValue<Vector2>();
         }
 
         /// <summary>采样视角输入（鼠标像素增量）。Update 内调用。</summary>
         public Vector2 ReadLook()
         {
-            return _lookAction == null ? Vector2.zero : _lookAction.ReadValue<Vector2>();
+            if (!InputEnabled || _lookAction == null)
+                return Vector2.zero;
+
+            return _lookAction.ReadValue<Vector2>();
         }
 
         private void OnCancelPerformed(InputAction.CallbackContext context)

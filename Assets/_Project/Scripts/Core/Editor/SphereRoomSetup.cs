@@ -92,6 +92,8 @@ namespace SphereRoom.Core.Editor
             // M1 非预测版：Owner 用 MovePosition 驱动，关掉重力避免落地穿模。
             rigidbody.useGravity = false;
             rigidbody.isKinematic = true;
+            // 运动学刚体 + MovePosition/MoveRotation：开启插值让本地看到的移动平滑（否则只有 50Hz 的台阶感）。
+            rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
 
             CapsuleCollider capsule = root.AddComponent<CapsuleCollider>();
             capsule.height = PhysicsTuning.PlayerHeight;
@@ -102,6 +104,8 @@ namespace SphereRoom.Core.Editor
             // 保持 Disabled：不自动改写 Rigidbody 设置，M1 由本工程自己控制运动学状态。
             SerializedObject transformSettings = new SerializedObject(networkTransform);
             transformSettings.FindProperty("_componentConfiguration").enumValueIndex = 0;
+            // Owner 权威（clientAuthoritative 默认 true）：不让服务器再把位姿回发给自己，否则本地转动会被旧状态顶回去。
+            transformSettings.FindProperty("_sendToOwner").boolValue = false;
             transformSettings.ApplyModifiedPropertiesWithoutUndo();
 
             PlayerInputReader inputReader = root.AddComponent<PlayerInputReader>();
@@ -142,6 +146,7 @@ namespace SphereRoom.Core.Editor
             SetObjectReference(playerCamera, "_camera", camera);
             SetObjectReference(playerCamera, "_pitchPivot", pivot.transform);
             SetObjectReference(playerCamera, "_input", inputReader);
+            SetObjectReference(playerCamera, "_motor", motor);
 
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
             Object.DestroyImmediate(root);

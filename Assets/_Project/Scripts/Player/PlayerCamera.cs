@@ -13,6 +13,8 @@ namespace SphereRoom.Player
         [SerializeField] private Camera _camera;
         [SerializeField] private Transform _pitchPivot;
         [SerializeField] private PlayerInputReader _input;
+        [Tooltip("Yaw 交由 PlayerMotor 在物理域应用，避免与运动学刚体互相覆盖。")]
+        [SerializeField] private PlayerMotor _motor;
         [SerializeField] private float _sensitivity = PhysicsTuning.PlayerLookSensitivity;
         [SerializeField] private float _pitchLimit = PhysicsTuning.PlayerPitchLimit;
 
@@ -23,6 +25,8 @@ namespace SphereRoom.Player
         {
             if (_input == null)
                 _input = GetComponent<PlayerInputReader>();
+            if (_motor == null)
+                _motor = GetComponent<PlayerMotor>();
         }
 
         public override void OnStartClient()
@@ -47,8 +51,9 @@ namespace SphereRoom.Player
 
             Vector2 look = _input.ReadLook();
 
-            // Yaw：作用玩家本体（Pitch 只影响相机支点，不同步）。
-            transform.Rotate(0f, look.x * _sensitivity, 0f, Space.Self);
+            // Yaw：交给 PlayerMotor 在 FixedUpdate 里用 MoveRotation 应用（物理域，避免抖动与覆盖）。
+            if (_motor != null)
+                _motor.ApplyYawDelta(look.x * _sensitivity);
 
             // Pitch：夹在上下限内，避免翻头。
             _pitch -= look.y * _sensitivity;
