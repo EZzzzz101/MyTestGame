@@ -18,8 +18,6 @@
 | 场景 | 仅模板 `Assets/Scenes/SampleScene.unity`；Boot / Room 待建 |
 | Git | ✅ 已初始化（`main`，首个提交 `cb7232e`） |
 
-遗留小问题：`Assets/AGENTS.md.meta` 是孤儿 meta（AGENTS.md 实际在项目根），待确认后删除。
-
 ---
 
 ## 1. 模块框架与依赖顺序
@@ -34,7 +32,7 @@ M0 工程基线
             ├─ M6 主机退出 ├ 四个独立加分模块，可乱序
             ├─ M7 定时生成 │
             └─ M8 Tapped   ┘
-               └─ M9 Steam 联机（可选，最后做）
+               └─ M9 Steam 联机（必做，最后做）
                   └─ M10 交付打包
 ```
 
@@ -63,6 +61,7 @@ M0 工程基线
 
 工作项：
 - 装 FishNet 4（git URL）与 ParrelSync 到 `Packages/manifest.json`，确认包内 `Examples/Prediction/Physics` 存在（M4 的参照骨架）。
+- 多开工具**定案：ParrelSync 为主，MPPM（com.unity.multiplayer.center）留作备选不装**。原因：MPPM 的 Local Players 多个玩家共享同一进程的静态变量，FishNet 的静态单例/管理器结构在共享进程下有冲突风险；ParrelSync 独立克隆进程隔离彻底，是 FishNet 社区验证过的方案。若后续实测 ParrelSync 克隆有包还原问题，再评估切 MPPM。
 - 建 `Assets/_Project/{Scripts/{Core,Network,Player,Ball,UI},Prefabs,Scenes,Materials}`。
 - 每个 Scripts 子目录一个 asmdef：`SphereRoom.Core / .Network / .Player / .Ball / .UI`，命名空间同名，引用 FishNet asmdef。
 - 建空场景 `Boot`、`Room`，加入 Build Settings 且 Boot 为索引 0。
@@ -83,9 +82,13 @@ M0 工程基线
 - uGUI 主菜单：`创建房间(Host)` / `加入(输 IP)` / 状态文本 / 断开返回。
 - Host 流程：`ServerManager.StartConnection()` + `ClientManager.StartConnection()` → 加载 `Room`；Join 流程：`ClientManager` 连 IP，场景由 Host 同步。
 - `PlayerSpawnManager`（仅 Host）：按连接在出生点 `Instantiate` + `ServerManager.Spawn()`。
-- `Player` 预制体（逻辑根 + Graphic 子物体）：NetworkObject / Rigidbody + CapsuleCollider / PlayerMotor（**非预测版**，先跑通链路）/ PlayerCamera（仅 Owner）/ 输入采集。
+- `Player` 预制体（逻辑根 + Graphic 子物体）：NetworkObject / Rigidbody + CapsuleCollider / PlayerMotor（**非预测版**，先跑通链路）/ PlayerCamera（仅 Owner）/ `PlayerInputReader`（见下）。
 - 玩家色板：`playerIndex` SyncVar → 4 色。
-- 输入：新输入系统 Action Asset 采样（键鼠 + 可选手柄），绑定在 asmdef 中被引用。
+- 输入方案（**定案**）：
+  - 不使用 `PlayerInput` 组件（Send Messages/事件回调模式与 Tick 采样模型和热路径纪律冲突，且字符串消息有分配）；
+  - 脚本命名 `PlayerInputReader`（避免与 `UnityEngine.InputSystem.PlayerInput` 撞名）；
+  - 输入资产：**把模板 `Assets/InputSystem_Actions.inputactions` 移入 `Assets/_Project/Input/` 并改名 `SphereRoom.inputactions`**（当前无任何引用依赖模板资产，移动安全；遵守"自制资源不落 Assets 根"纪律），在其中加 Move/Look/ESC 等 Action；
+  - 采样策略：**Move 在 `OnTick` 内 `ReadValue` 采样**（进 `MoveInput` 结构体随 Replicate 上行）；**Look（鼠标 delta）在 `Update` 采样并即时应用相机旋转**（视角是本地表现，不等 Tick，Pitch 不同步）；ESC 在 Update 采样控制光标/UI。生成 C# Class 或直接资产引用二选一，代码侧不 `Load` 字符串路径。
 
 **完成定义**：ParrelSync 双开，A Host / B Join，两端互见对方移动与朝向；断线不崩。
 **注意**：本节点故意不上预测，先把「连接 + 场景 + Spawn + 输入」链路跑通，M3 再换成预测移动。
@@ -175,13 +178,13 @@ M0 工程基线
 
 ---
 
-### [ ] M9 Steam 联机（P2-1，可选加分，最后做）
+### [ ] M9 Steam 联机（P2-1，必做，最后做）
 
 **目标**：一个 Build 同时支持 LAN 与 Steam，好友可经 Steam 邀请入房。
 
 工作项：装 SteamworksSockets → `TransportMultiplexer` 挂 Tugboat + Steamworks → Host 建 Lobby → Overlay 邀请 → 从 Lobby 取 Host SteamID 发起 P2P；`steam_appid.txt = 480`（项目根 + Build 目录）。
 **完成定义（T8）**：两台设备经 Steam Overlay 邀请联机成功。
-**前提/限制**：M4 已通过；单 Steam 账号无法自连 P2P，需两设备/两账号，日常回路仍用 ParrelSync + LAN。
+**前提/限制**：M4 已通过；单 Steam 账号无法自连 P2P，需**两个 Steam 账号 + 两台设备**（账号已具备，第二台设备待确认）。日常开发回路仍用 ParrelSync + LAN，Steam 只在 M9 集中联调。
 
 ---
 
@@ -212,4 +215,4 @@ M0 工程基线
 | M10 | M5 | T10 | T9 稳定性 |
 
 时间预算：M0 0.5h / M1 1h / M2 1h / M3+M4 1.5h / M5–M8 共 1h / M9 1h / M10 0.5h（合计约 6.5h）。
-超时裁剪顺序：M9 → 球上限优化 → UI 打磨（M5–M8 **不裁**，都是需求内条目）。
+超时预案：优先压缩打磨类工作（UI/美术，不评分）；M5–M9 **均不裁**（Steam 已定级必做，只允许换实现方式）。

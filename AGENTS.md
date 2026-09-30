@@ -1,7 +1,7 @@
 # AGENTS.md — Sphere Room (Unity 6 Multiplayer Demo)
 
 > 本文档供 AI 编码代理（Codex / Claude Code / Copilot 等）阅读。执行任何代码改动前请完整阅读本文档。
-> 人类可读的完整方案见 `docs/DEVELOPMENT_PLAN.md`；代码规范见 `docs/CODING_STANDARDS.md`（**强制遵守**）。
+> 人类可读的完整方案见 `DEVELOPMENT_PLAN.md`；代码规范见 `CODING_STANDARDS.md`（**强制遵守**）。
 
 ## 1. 项目使命
 
@@ -25,7 +25,7 @@
 | 拓扑 | Host-Client（一人 Host，其他 Join），无 Dedicated Server、无 Host Migration |
 | TickRate | 50 Hz；`Time.fixedDeltaTime = 0.02`（1 Tick = 1 物理步，完全对齐） |
 | 目标平台 | Windows Standalone x64 |
-| 代码规范 | `docs/CODING_STANDARDS.md` 全部条款，尤其热路径禁令（禁字符串拼接/装箱/LINQ/GC 分配） |
+| 代码规范 | `CODING_STANDARDS.md` 全部条款，尤其热路径禁令（禁字符串拼接/装箱/LINQ/GC 分配） |
 | Git | 保留完整提交历史，**严禁 squash**；每个功能一个提交，提交信息用 Conventional Commits |
 
 ## 3. 环境与依赖
@@ -48,7 +48,7 @@ Assets/
 │   ├── Scripts/
 │   │   ├── Core/              # Bootstrap、场景加载
 │   │   ├── Network/           # 网络管理、Spawn 管理
-│   │   ├── Player/            # PlayerInput / PlayerMotor / PlayerCamera / TappedUI
+│   │   ├── Player/            # PlayerInputReader / PlayerMotor / PlayerCamera / TappedUI
 │   │   ├── Ball/              # BallPrediction / BallSpawner / TappedDispatcher
 │   │   └── UI/                # 菜单、HUD
 │   ├── Prefabs/               # Player / SharedBall / GameManager
@@ -100,7 +100,7 @@ Assets/
 - 客户端订阅 `ClientManager.OnClientDisconnectState`：弹窗"主机已断开连接"→ 返回 Boot 场景、重置 NetworkManager；
 - 不实现 Host Migration（README 说明取舍）。
 
-### 5.8 Steam（最后做，可裁剪）
+### 5.8 Steam（最后做，必做）
 - `TransportMultiplexer` 同时挂 Tugboat + SteamworksSockets（一个 Build 同时支持 LAN 与 Steam）；
 - Lobby：Host 创建 → Steam Overlay 邀请 → 对方接受后以 Lobby 成员 SteamID 建立 P2P 连接；
 - `steam_appid.txt = 480`。
@@ -126,7 +126,7 @@ Assets/
   验收：两台设备经 Steam Overlay 联机成功。同机限制：单 Steam 账号无法自连 P2P，Steam 联调需两设备/两账号；日常开发回路用 ParrelSync + Tugboat LAN。
 - [ ] **T10 提交打包**：Windows Build、README（选型理由/运行步骤/Steam 测试步骤/已知限制）、按 CODING_STANDARDS 自查、Git 历史检查（无 squash）。
 
-## 7. 关键禁令（违反即返工，完整版见 docs/CODING_STANDARDS.md）
+## 7. 关键禁令（违反即返工，完整版见 CODING_STANDARDS.md）
 
 - ❌ `Update`/`FixedUpdate`/`OnTick`/网络回调内：字符串拼接（`+`、`$""`、`string.Format`、`.ToString()`）、装箱拆箱、LINQ、闭包/lambda 捕获、`new` 引用类型、`GetComponent`/`Find*`/`Camera.main`、`Debug.Log`；
 - ❌ 用 `Time.time`/协程做网络计时；
@@ -136,7 +136,7 @@ Assets/
 
 ## 8. 完成定义（DoD）
 
-1. `docs/DEVELOPMENT_PLAN.md` 第 7 节测试矩阵 T1-T7 全通过（T8 Steam 可选）；
+1. `DEVELOPMENT_PLAN.md` 第 8 节测试矩阵 T1-T9 全通过（T8 Steam 已定级必做）；
 2. 代码通过 CODING_STANDARDS 审查清单；
 3. Windows Build 可运行，`Build/` 目录就位；
 4. README ≤ 1 页，含网络选型理由；

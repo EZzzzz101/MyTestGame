@@ -16,7 +16,7 @@
 | **P1-2** | 主机退出处理 | 主机断开时客户端有合理表现或提示，不崩溃 |
 | **P1-3** | 定时生成 | Host 控制，每 15s 随机位置生成一个球 |
 | **P1-4** | 碰触提示 | 玩家触球时 UI 显示 "Tapped" |
-| **P2-1** | Steam 联机 | Steam Transport/Relay（App ID 480），好友/房间邀请，README 写明测试步骤 |
+| **P2-1（已定级为必做）** | Steam 联机 | Steam Transport/Relay（App ID 480），好友/房间邀请，README 写明测试步骤 |
 
 不投入项：美术/贴图/UI 打磨/特效（不评分）。素材一律 Cube + 内置 Sphere + uGUI 原型。
 
@@ -75,7 +75,7 @@ Scenes/
 
 | Prefab | 组件 | 网络语义 |
 |--------|------|----------|
-| `Player` | `NetworkObject`、`Rigidbody`+`CapsuleCollider`、`PredictionRigidbody`、`PlayerInput`、`PlayerMotor`、`PlayerCamera`(仅 Owner)、`PlayerTappedUI` | **预测对象**：客户端预测，服务器和解 |
+| `Player` | `NetworkObject`、`Rigidbody`+`CapsuleCollider`、`PredictionRigidbody`、`PlayerInputReader`、`PlayerMotor`、`PlayerCamera`(仅 Owner)、`PlayerTappedUI` | **预测对象**：客户端预测，服务器和解 |
 | `SharedBall` | `NetworkObject`、`Rigidbody`+`SphereCollider`、`PredictionRigidbody`、`BallPrediction` | **共享刚体**：服务器权威模拟，客户端预测 + reconcile 修正 |
 | `GameManager` | `NetworkObject`、`BallSpawner`、`TappedDispatcher` | Host 单例，服务器逻辑：定时生成、Tapped 判定 |
 
@@ -175,7 +175,7 @@ SharedBall (逻辑根: 同上)
 | **M4 Steam（P2-1）** | SteamworksSockets + Multiplexer + Lobby 邀请闭环（LAN-first 分层接入，见第 3 节） | 1h | 两台设备经 Steam 联机成功 |
 | **M5 打磨提交** | Windows Build、README、规范自查、Git 历史检查 | 0.5h | 按题目要求可提交 |
 
-> 裁剪顺序（仅作超时应急，不做计划）：M4 → 球上限优化 → UI/美术（不评分）；**M0-M3 绝不裁**。美术资源替换不占里程碑（见 4.2 Prefab 层级纪律）。
+> 裁剪顺序（仅作超时应急，不做计划）：球上限优化 → UI/美术（不评分）；**M0-M4 绝不裁**（Steam 已定级必做）。美术资源替换不占里程碑（见 4.2 Prefab 层级纪律）。
 
 ---
 
@@ -186,7 +186,7 @@ Unity 版本：**6000.3.14f1**。
 | 包 | 用途 | 安装 |
 |----|------|------|
 | **FishNet 4** | 网络框架（预测/和解/RPC/Spawn） | git URL：`https://github.com/FirstGearGames/FishNet.git?path=/Assets/FishNet` |
-| **SteamworksSockets** | Steam transport（仅 M4 引入，裁剪则不装） | git URL：`https://github.com/FirstGearGames/SteamworksSockets.git?path=/Assets/SteamworksSockets`（URL 变动以 FishNet 官方文档 Transport 章为准） |
+| **SteamworksSockets** | Steam transport（M4 引入，必做） | git URL：`https://github.com/FirstGearGames/SteamworksSockets.git?path=/Assets/SteamworksSockets`（URL 变动以 FishNet 官方文档 Transport 章为准） |
 | **FishySteamworks** | Steam transport 备选 | `https://github.com/FirstGearGames/FishySteamworks.git?path=/Assets/FishySteamworks` |
 | **ParrelSync** | 同机多开 Editor 测试 | `https://github.com/JoinGame/ParrelSync.git?path=/ParrelSync` |
 | URP | 渲染管线 | Unity 6 模板自带 |
@@ -209,7 +209,7 @@ Unity 版本：**6000.3.14f1**。
 | T8 | Steam | 两设备 Overlay 邀请 | 全流程 Steam transport 可用 |
 | T9 | 稳定性 | 4 客户端 + 8 球 5 分钟 | 帧率稳定，无内存增长，断线正常 |
 
-性能红线：热路径遵守 `docs/CODING_STANDARDS.md`；Build 后 Profiler 抽查稳态 0 GC/帧。
+性能红线：热路径遵守 `CODING_STANDARDS.md`；Build 后 Profiler 抽查稳态 0 GC/帧。
 
 ---
 
@@ -228,13 +228,13 @@ Unity 版本：**6000.3.14f1**。
 |------|------|------|
 | FishNet 预测 API 调通超预算 | 中 | M0 先跑通官方 `Examples/Prediction/Physics`，以其为骨架 |
 | 双人撞球偶发偏差 | 中 | 平滑参数调优；TickRate/物理步严格对齐；README 说明以服务器和解为准 |
-| Steam transport URL/版本变动 | 低 | 以官方文档为准；备选 FishySteamworks；最坏裁剪 P2-1（不扣分） |
-| 时间不足 | — | 按 M6 裁剪顺序，M0-M2 不裁 |
+| Steam transport URL/版本变动 | 低 | 以官方文档为准；备选 FishySteamworks；P2-1 已定级必做，只替换实现方式、不裁剪功能 |
+| 时间不足 | — | 按第 6 节裁剪顺序，M0-M4 不裁 |
 
 ---
 
 ## 附：文档索引
 
-- `docs/DEVELOPMENT_PLAN.md` — 本文档（工程方案）
+- `DEVELOPMENT_PLAN.md` — 本文档（工程方案）
 - `AGENTS.md` — Codex/AI Agent 工程约定与任务分解（T1-T10）
-- `docs/CODING_STANDARDS.md` — 代码规范（热路径禁令、审查清单）
+- `CODING_STANDARDS.md` — 代码规范（热路径禁令、审查清单）
