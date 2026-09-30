@@ -132,7 +132,12 @@ Assets/
 - ❌ 用 `Time.time`/协程做网络计时；
 - ❌ 客户端直接改共享状态、客户端 Spawn 网络对象；
 - ❌ 把渲染 Mesh 直接挂在被回滚的逻辑刚体上；
+- ❌ **修改 PROGRESS.md 已勾选节点的核心类来实现新功能**——走新增类/组件/事件扩展（开闭原则，CODING_STANDARDS §8.1）；
+- ❌ 网络方法缺「执行侧 + 触发时机」注释、热路径方法缺 `[热路径]` 标注；提交死代码注释 / 无主 TODO；
+- ❌ 新增 static 单例（NetworkManager 除外）、跨 asmdef 反向引用、UI 直接写玩法状态；
 - ❌ 一次性 git squash 提交（评审要看开发过程）。
+
+命名与注释细节见 CODING_STANDARDS §6/§7（布尔 `Is/Has/Can` 前缀、方法动词开头、网络数据结构 `Input/Data/State` 后缀、类头中文 `<summary>` 等）。
 
 ## 8. 完成定义（DoD）
 

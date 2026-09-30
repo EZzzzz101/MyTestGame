@@ -1,7 +1,7 @@
 # Sphere Room — 代码规范（CODING STANDARDS）
 
 > 本规范为**强制标准**，适用于本项目全部 C# 代码。CI/代码审查/Agent 生成代码均以此为准。
-> 核心目标：**热路径 0 GC 分配、网络状态一致性、可读可查的过程历史**（对应笔试评分项"整个项目代码的规范性"）。
+> 核心目标：**热路径 0 GC 分配、网络状态一致性、面向维护的结构纪律、可读可查的过程历史**（对应笔试评分项"整个项目代码的规范性"）。
 
 ---
 
@@ -138,35 +138,174 @@ Physics.RaycastNonAlloc(...)
 4. 物理材质参数（弹性/摩擦）集中在 `PhysicsTuning` 常量类，禁止 Inspector 内散落魔法数；
 5. 碰撞响应逻辑（Tapped 判定）只在服务器 `OnCollisionEnter` 中处理。
 
-## 6. 结构与命名规范
+## 6. 命名规范（全项目统一，Agent 生成代码逐条对照）
 
-1. **asmdef**：`Assets/_Project/Scripts/*` 按模块划分（Core/Network/Player/Ball/UI），命名空间 `SphereRoom.<Module>`；
-2. **私有字段** `_camelCase`；公共属性/方法 `PascalCase`；常量 `PascalCase` 或 `UPPER_SNAKE`（全项目统一一种）；接口 `I` 前缀；
-3. **一个类一个文件**，文件名 = 类名；单文件 ≤ 400 行，超出即拆分；
-4. `using` 置于 namespace 外（.editorconfig 统一）；删除未使用 using；
-5. 网络 Prefab 命名：`Player`、`SharedBall`、`GameManager`；场景：`Boot`、`Room`；
-6. 禁止中文注释进入代码（Git 提交信息用中文可以，代码注释统一中文/英文选一并全项目统一——本项目选**中文注释**）；
-7. 序列化字段必须带 `[SerializeField] private`，禁止 public 字段。
+### 6.1 C# 标识符总表
 
-## 7. Git 提交规范
+| 元素 | 规则 | 正例 | 反例 |
+|------|------|------|------|
+| 类 / 结构体 / 枚举 | `PascalCase` 名词，按职责命名，**禁滥用 Manager** | `BallSpawner`、`TappedDispatcher` | `BallManager`（职责不明）、`Util` |
+| 接口 | `I` + `PascalCase` | `IBallStateProvider` | — |
+| 私有字段（含 `[SerializeField]`） | `_camelCase` | `_rb`、`_moveInput` | `m_rb`、`rb`（裸驼峰） |
+| 公共属性 | `PascalCase`；**布尔必须 `Is`/`Has`/`Can` 前缀** | `IsHostReady`、`CanSpawn` | `ready`、`flag` |
+| 常量 / `static readonly` | `PascalCase`，语义完整 | `MaxBallCount`、`SpawnIntervalTicks` | `NUM`、`_max` |
+| 方法 | `PascalCase` **动词开头** | `SpawnBall`、`ApplyMovement`、`ClampInput` | `Ball()`、`DealWith()` |
+| 事件 | `PascalCase` 名词短语；处理器 `On` + 事件名 | `event Action<BallState> BallSpawned` / `OnBallSpawned` | `Notify`、`Fire1` |
+| 网络数据结构 | 名词 + 用途后缀：`Input`（上行输入）/ `Data`（复写数据）/ `State`（和解状态） | `MoveInput`、`BallReconcileState` | `MoveDataInfo` |
+| 泛型参数 | `T` 或 `T` + 含义 | `TState` | `<type>` |
+
+### 6.2 命名禁区
+
+- **禁模糊词**：`temp`、`data2`、`info`、`handle`、`misc`，以及只靠数字区分的 `ball1`/`ball2`；
+- **禁拼音与中文标识符**（注释用中文，标识符一律英文）；
+- **缩写白名单**：仅允许 `UI`、`ID`、`RPC`、`RTT`、`GC`；短名（`_rb`、`_cam`）**仅限私有缓存字段**；
+- **不用名字后缀表达网络语义**：执行侧由 FishNet attribute 与注释标注表达（见 7.2），不搞 `XxxOnServer` 这类命名。
+
+### 6.3 Unity 资产命名
+
+| 资产类型 | 规则 | 正例 |
+|----------|------|------|
+| Prefab | `PascalCase` 名词，无前缀无编号 | `Player`、`SharedBall` |
+| 场景 | `PascalCase` | `Boot`、`Room` |
+| 材质 | `Mat_` 前缀 + 用途 | `Mat_Player0`~`3`、`Mat_Ball` |
+| 输入资产 | 已定案 | `Assets/_Project/Input/SphereRoom.inputactions` |
+| 脚本资产（`.cs`） | 文件名 = 类名，一个文件一个类 | — |
+
+### 6.4 asmdef 结构
+
+1. `Assets/_Project/Scripts/*` 按模块划分（Core/Network/Player/Ball/UI），命名空间 `SphereRoom.<Module>`；
+2. **依赖必须单向**：`Core ← Network ← Player/Ball ← UI`（UI 可引用 Player/Ball，反向禁止）；
+3. 一个类一个文件，单文件 ≤ 400 行，超出即拆分；
+4. `using` 置于 namespace 外（.editorconfig 统一），提交前删除未使用 using；
+5. 序列化字段必须 `[SerializeField] private`，禁止 public 字段（public 走属性）。
+
+---
+
+## 7. 注释规范（面向维护，Agent 同样强制）
+
+### 7.1 总则
+
+1. **语言**：注释统一**中文**；标识符一律英文；
+2. **写 why 不写 what**：解释"为什么这么做 / 有什么约束 / 踩过什么坑"，不复述代码在做什么；
+3. **同步性**：改代码必须同步改注释。**过期注释比没有注释更糟**（它是错误的文档），发现即删即改；
+4. **删除优于注释**：不用的代码直接删（Git 保存历史），**禁止注释掉代码后提交**。
+
+### 7.2 必须写注释的位置
+
+**① 类头**：一句话职责 + 网络语义。模板：
+
+```csharp
+/// <summary>
+/// 球体预测同步：客户端本地模拟 + 服务器 reconcile 修正（非玩家共享刚体，无本地输入）。
+/// 执行侧：双端；[Reconcile] 数据由服务器下发。
+/// </summary>
+```
+
+**② public 方法**：XML `<summary>` 中文说明；参数含义不平凡时补 `<param>`。
+
+**③ 网络相关方法**（RPC / `[Replicate]` / `[Reconcile]` / Spawn-Despawn 逻辑）：首行**必须**标注两件事——
+- **执行侧**：`[服务器]` / `[客户端]` / `[仅 Owner]` / `[双端]`；
+- **触发时机**：`Tick 驱动` / `事件驱动` / `一次性（OnStartNetwork 等）`。
+
+```csharp
+// [服务器 | Tick 驱动] 每 15s 随机位置生成一球，上限 8 个（见 PhysicsTuning.MaxBallCount）。
+[ObserversRpc]
+private void RpcBallSpawned(...)
+```
+
+**④ 热路径方法**：首行标注 `[热路径]`，表示第 3 节全部禁令适用——这是给后续维护者（含 Agent）的警示牌。
+
+**⑤ 调参与魔法值**：写出处或依据。如 `// 0.6：弹回观感与同步稳定的折中值，集中定义于 PhysicsTuning.Bounciness`。
+
+**⑥ 临时方案**：必须带替换节点号：
+
+```csharp
+// TODO(M4): 临时方案——NetworkTransform 近似同步；M4 替换为 reconcile-only 预测。
+```
+
+### 7.3 注释禁区
+
+- ❌ 复述代码的废话注释（`// 设置速度` `velocity = v;`）；
+- ❌ 注释掉的死代码入库；
+- ❌ 与代码不同步的过期注释；
+- ❌ 无主 TODO / FIXME（必须带节点号或问题编号，`// TODO:` 裸写不允许）；
+- ❌ 用注释做变更记录（"xx 修改于 xx 日"——那是 Git 提交信息的职责）。
+
+---
+
+## 8. 面向维护的开发原则（可读性与可维护性）
+
+> 本章目标是：**任何节点完成后，后续节点（含 M5-M8 加分项）不需要"读懂并回改"已验收的代码就能接入**。Agent 实现新需求前先通读本章。
+
+### 8.1 开闭原则（本章核心，重点遵守）
+
+**对扩展开放，对修改关闭**：新功能通过**新增类 / 新增组件 / 订阅已有事件**实现，而不是在已验收的核心类里加分支。
+
+- **落地判定标准**：实现一个新需求时，修改的文件数应 ≤ 2，且**不得修改 PROGRESS.md 已勾选节点的核心类**（如 `BallPrediction`、`PlayerMotor`）。需要往里加 `if` 分支 → 违反开闭，改为：挂新组件、或核心类本来就暴露的事件/数据扩展；
+- **M4 完成时必须留好 M5-M8 的扩展点**：核心逻辑类对外**只暴露事件与只读状态**（`event Action<...> BallSpawned`、`public BallState Current`），加分项模块一律写成"订阅者 + 新增类"，不回改核心；
+- **反向约束（防过度设计 / YAGNI）**：禁止为想象中的需求建抽象层、接口、继承体系。只对**排期上确定会扩展**的点做抽象（本项目 = M5-M8 加分项、后期换皮），其余直接写死。原型项目的过度抽象和Copy-Paste一样是维护性负债。
+
+### 8.2 单一职责
+
+- 一个类只做一件事，**网络同步 / 玩法判定 / 表现与 UI 三层分离**（项目内范例：`BallPrediction` 只管同步，`TappedDispatcher` 只管判定，`PlayerTappedUI` 只管显示）；
+- 违反信号：类名出现 `And`、泛化的 `Manager`/`Processor`；单文件 > 400 行；方法 > 50 行。出现即重构拆分。
+
+### 8.3 组合优于继承
+
+- MonoBehaviour 行为用**挂组件组合**表达，继承深度 ≤ 1；
+- 禁止"为了复写一个方法"建基类——拆成两个组件。
+
+### 8.4 显式依赖与解耦
+
+- 依赖必须显式：`[SerializeField]` 或方法参数传入；**全项目唯一允许的静态单例是 NetworkManager**（FishNet 生态），其他类禁止 `static Instance`；
+- **跨模块用事件解耦**：核心逻辑发布事件（`BallSpawned`、`HostDisconnected`），表现层订阅；**UI 层禁止直接写玩法状态**，反向只读；
+- asmdef 依赖方向见 6.4，反向引用编译期就会被拦截，不允许为绕过而把类挪到 Core。
+
+### 8.5 DRY 与性能的取舍
+
+- 同一段逻辑出现**第 3 次**必须抽取；
+- **例外**：热路径为了 0 GC 分配，允许保留手写展开的重复代码（如多处 for 循环代替 LINQ），必须注释说明"为避免分配未抽取"——性能优先于 DRY，且让维护者知道这是有意为之。
+
+### 8.6 可读性基础
+
+- 方法 ≤ 50 行（不含注释）；嵌套 ≤ 3 层，超出用 **early return** 或提取方法；
+- **禁止魔法数**，一律命名常量（集中 `PhysicsTuning`）；
+- **公共 API 禁止 bool 参数**（调用处不可读）：拆成两个方法或用枚举；
+- 一行一个声明、一行一个语句；三元运算符只用于简单赋值；
+- 长布尔表达式提取为命名良好的局部变量或方法（`bool shouldRespawn = IsBelowLimit && HasFreeSlot;`）。
+
+---
+
+## 9. Git 提交规范
 
 1. **保留过程**：每个功能/修复独立提交，**严禁 squash / rebase 压缩历史**（评审明确要看提交记录）；
 2. Conventional Commits：`feat(player): 预测移动` / `fix(ball): reconcile 抖动` / `chore(build): 打包配置`；
 3. 不提交：`Library/`、`Temp/`、`Logs/`、`Build/` 中间产物（.gitignore 用 Unity 官方模板；**最终交付时 Build/ 目录需要随仓库或单独提供，以题目要求为准**）；
 4. 提交前编译 0 error 0 warning（新增代码不得引入 warning）。
 
-## 8. 审查清单（Checklist）
+## 10. 审查清单（Checklist）
 
 每次提交前自查 / 评审方按此打分：
 
+**性能与网络**
 - [ ] 热路径（Update/FixedUpdate/OnTick/RPC/物理回调）内无：字符串拼接、装箱拆箱、LINQ、闭包、`new` 引用类型、`GetComponent`/`Find*`、`Debug.Log`、`params`、接口 foreach；
 - [ ] 物理查询使用 NonAlloc 重载；
 - [ ] 网络计时全部基于 Tick；
-- [ ] 共享状态只由服务器写入；
-- [ ] 输入在服务器侧被验证/clamp；
-- [ ] 对象池覆盖高频生成/销毁路径；
+- [ ] 共享状态只由服务器写入；输入在服务器侧被验证/clamp；
+- [ ] 对象池覆盖高频生成/销毁路径；TickRate/fixedDeltaTime 未被单独改动。
+
+**命名与注释**
+- [ ] 命名符合 6.1 总表：布尔 `Is`/`Has`/`Can`、方法动词开头、网络数据结构后缀（Input/Data/State）；无模糊词/拼音/数字后缀/Manager 滥用；
+- [ ] 新增 public 类/方法有中文 `<summary>`；网络方法标注执行侧 + 触发时机；热路径方法有 `[热路径]` 标注；
+- [ ] 临时方案 TODO 带节点号；无死代码注释、无过期注释、无无主 TODO。
+
+**结构与维护性**
+- [ ] 开闭原则：新需求通过新增类/组件/事件接入，未修改已验收节点核心类（如必须修改，提交信息中说明理由）；
+- [ ] 依赖单向（6.4），无新增 static 单例（NetworkManager 除外）；UI 未直接写玩法状态；
+- [ ] 方法 ≤ 50 行、嵌套 ≤ 3 层、无魔法数、公共 API 无 bool 参数；
+- [ ] 新类有 asmdef 归属与命名空间；单文件 ≤ 400 行。
+
+**提交质量**
 - [ ] `PhysicsTuning` 无散落魔法数；
-- [ ] TickRate/fixedDeltaTime 未被单独改动；
-- [ ] 新类有 asmdef 归属与命名空间；
 - [ ] 无编译 warning；
 - [ ] 提交信息符合规范且未被压缩。
