@@ -20,13 +20,6 @@
 
 模板遗留清理：`Assets/Scenes/SampleScene.unity`、`Assets/Readme.asset` 已删；仅剩 `Assets/InputSystem_Actions.inputactions` 待 M1 迁入 `_Project/Input/` 并改名 `SphereRoom.inputactions`。
 
-> ⚠️ **环境阻塞（2026-09-30 夜，未解决）**：本机 Unity 6000.3.14f1 **无法为任何新建/克隆工程解析包**，报
-> `Failed to resolve packages: The "path" argument must be of type string. Received undefined. No packages loaded.`
-> 已排除的因素：① 与 FishNet/ParrelSync 的 git 依赖无关——把两个 git 依赖删掉后同样失败；② 与路径空格/中文无关——拷到 `E:\vp`（全 ASCII）同样失败；③ 与 ParrelSync 无关——Unity 自己用 `-createProject` 建的空工程同样失败；④ 与图形模式无关——batchmode 与 GUI 都失败。
-> 定位：`%LOCALAPPDATA%\Unity\Editor\upm.log` 显示编辑器发给 UPM 服务的请求参数为空（`params: {}`）且 `config:project:get-registries` 直接 500，服务端因此 `path.join(undefined)` 抛错。**主工程能用只是因为它的 Library 是"热"的（已有解析状态），并非环境正常。**
-> 处置顺序：退出**所有** Unity 实例 → 删除 `%LOCALAPPDATA%\Unity\cache\upm`（必要时连 `cache\packages`、`Editor\upm.log` 一起清）→ 重启 Unity 再试；仍不行就用 Unity Hub 重装 6000.3.14f1（当前安装路径为 `E:\unity`，非 Hub 标准布局，属高风险点）。
-> 影响：M0 的 ParrelSync 克隆验收被环境阻塞；**修好之前不要删主工程的 `Library/`**。备选测试回路：用 Windows Build 出来的 exe 当第二个客户端（M10 本来就要出 Build）。
-
 ---
 
 ## 1. 模块框架与依赖顺序
