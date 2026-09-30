@@ -25,11 +25,11 @@ namespace SphereRoom.Player
                 _input = GetComponent<PlayerInputReader>();
         }
 
-        public override void OnStartNetwork()
+        public override void OnStartClient()
         {
-            base.OnStartNetwork();
+            base.OnStartClient();
 
-            _isOwner = IsOwner;
+            _isOwner = Owner != null && Owner.IsLocalClient;
             if (_camera != null)
                 _camera.enabled = _isOwner;
 

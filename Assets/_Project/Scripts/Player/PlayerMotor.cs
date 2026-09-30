@@ -16,6 +16,7 @@ namespace SphereRoom.Player
         [SerializeField] private float _moveSpeed = PhysicsTuning.PlayerMoveSpeed;
 
         private Rigidbody _rigidbody;
+        private bool _isOwner;
 
         private void Awake()
         {
@@ -24,30 +25,33 @@ namespace SphereRoom.Player
                 _input = GetComponent<PlayerInputReader>();
         }
 
-        public override void OnStartNetwork()
+        public override void OnStartClient()
         {
-            base.OnStartNetwork();
+            base.OnStartClient();
+
+            // FishNet 分析器要求：所有权判定放在 OnStartClient/OnStartServer，且用 Owner.IsLocalClient。
+            _isOwner = Owner != null && Owner.IsLocalClient;
+
+            if (_input == null)
+                return;
 
             // 只有本地 Owner 采集输入；其余端只接受 NetworkTransform 同步。
-            if (_input != null)
-            {
-                _input.SetInputEnabled(IsOwner);
-                if (IsOwner)
-                    _input.CancelPressed += OnCancelPressed;
-            }
+            _input.SetInputEnabled(_isOwner);
+            if (_isOwner)
+                _input.CancelPressed += OnCancelPressed;
         }
 
-        public override void OnStopNetwork()
+        public override void OnStopClient()
         {
-            base.OnStopNetwork();
+            base.OnStopClient();
 
-            if (_input != null && IsOwner)
+            if (_input != null && _isOwner)
                 _input.CancelPressed -= OnCancelPressed;
         }
 
         private void FixedUpdate()
         {
-            if (!IsOwner || _input == null)
+            if (!_isOwner || _input == null)
                 return;
 
             Vector2 move = _input.ReadMove();

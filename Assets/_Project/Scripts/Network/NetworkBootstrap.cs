@@ -78,8 +78,9 @@ namespace SphereRoom.Network
             _mode = NetworkMode.Host;
             ReportStatus(_mode, "正在启动主机…");
 
-            _networkManager.ServerManager.StartConnection();
-            _networkManager.ClientManager.StartConnection();
+            // listen server：本机同时是 Server 与 Client，端口由 Inspector 配置。
+            _networkManager.ServerManager.StartConnection(_port);
+            _networkManager.ClientManager.StartConnection(_address, _port);
         }
 
         /// <summary>加入房间：用 Inspector 里配置的地址直连。</summary>
@@ -98,7 +99,7 @@ namespace SphereRoom.Network
             _mode = NetworkMode.Client;
             ReportStatus(_mode, "正在连接主机…");
 
-            _networkManager.ClientManager.StartConnection(_address);
+            _networkManager.ClientManager.StartConnection(address, _port);
         }
 
         /// <summary>断开并回到未联机状态。</summary>
@@ -161,7 +162,7 @@ namespace SphereRoom.Network
             SceneLoadData sceneLoadData = new SceneLoadData(GameScenes.Room);
             // 叠加加载：Boot 常驻（NetworkManager 与菜单都在其中），不做替换。
             sceneLoadData.ReplaceScenes = ReplaceOption.None;
-            sceneLoadData.PreferredActiveScene = new SceneLookupData(GameScenes.Room);
+            sceneLoadData.PreferredActiveScene = new PreferredScene(new SceneLookupData(GameScenes.Room));
 
             _networkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
         }
