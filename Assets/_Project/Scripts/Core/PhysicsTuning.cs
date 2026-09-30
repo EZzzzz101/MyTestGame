@@ -38,11 +38,11 @@ namespace SphereRoom.Core
 
         // ---- 共享球与房间（M2 起使用）----
 
-        /// <summary>球与墙面/柱子的弹性。</summary>
-        public const float BallBounciness = 0.65f;
+        /// <summary>球与墙面/柱子的弹性（0.65：弹回观感与同步稳定的折中值）。</summary>
+        public const float Bounciness = 0.65f;
 
         /// <summary>球与墙面/柱子的摩擦。</summary>
-        public const float BallFriction = 0.4f;
+        public const float Friction = 0.4f;
 
         /// <summary>球半径。</summary>
         public const float BallRadius = 0.6f;
@@ -51,9 +51,9 @@ namespace SphereRoom.Core
         public const float BallSpawnHeight = 2f;
 
         /// <summary>场景内球数量上限，超限销毁最旧的。</summary>
-        public const int BallLimit = 8;
+        public const int MaxBallCount = 8;
 
         /// <summary>定时生成间隔（Tick 数）：15 秒 @ 当前 TickRate。</summary>
-        public const int BallSpawnIntervalTicks = 15 * TickRate;
+        public const int SpawnIntervalTicks = 15 * TickRate;
     }
 }

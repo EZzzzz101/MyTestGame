@@ -9,6 +9,7 @@ namespace SphereRoom.Player
     /// 设计定案：不使用 PlayerInput 组件的 Send Messages 模式（事件回调 + 字符串消息与热路径纪律冲突）；
     /// Move 供 Tick 内采样（M3 起进入 [Replicate]），Look / ESC 在 Update 采样不入 Tick。
     /// Action 引用在 Awake 里解析一次并缓存，运行期不再做任何查找。
+    /// 执行侧：只有本地 Owner 采信输入，远端玩家对象只创建不读取。
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PlayerInputReader : MonoBehaviour
@@ -30,9 +31,10 @@ namespace SphereRoom.Player
         /// <summary>ESC 按下（用于释放光标 / 返回菜单）。</summary>
         public event Action CancelPressed;
 
-        /// <summary>玩家操作是否已启用（仅本地 Owner 为 true）。</summary>
-        public bool InputEnabled { get; private set; }
+        /// <summary>本对象是否采信输入（仅本地 Owner 为 true）。</summary>
+        public bool IsInputEnabled { get; private set; }
 
+        // [双端 | 一次性（Awake）] 解析并缓存 Action 引用；此后运行期不再做查找。
         private void Awake()
         {
             if (_actions == null)
@@ -47,9 +49,9 @@ namespace SphereRoom.Player
             _cancelAction = _actions.FindActionMap(UiMapName, true).FindAction(CancelActionName, true);
 
             // 地图只启用一次：同一进程里可能有多个玩家对象（本地玩家 + 远端玩家），
-            // 若各自 Enable/Disable 同一份资产的 ActionMap 会互相踩。是否采信输入改由 InputEnabled 标志决定。
+            // 若各自 Enable/Disable 同一份资产的 ActionMap 会互相踩。是否采信输入改由 IsInputEnabled 标志决定。
             _playerActionMap.Enable();
-            SetInputEnabled(false);
+            DisableInput();
         }
 
         private void OnEnable()
@@ -64,32 +66,37 @@ namespace SphereRoom.Player
                 _cancelAction.performed -= OnCancelPerformed;
         }
 
-        /// <summary>
-        /// 标记本对象是否采信输入。只控制读取开关，不切换 ActionMap 的启停（避免与同进程其他玩家对象冲突）。
-        /// </summary>
-        public void SetInputEnabled(bool value)
+        /// <summary>开始采信输入（仅本地 Owner 调用）。</summary>
+        public void EnableInput()
         {
-            InputEnabled = value;
+            IsInputEnabled = true;
         }
 
-        /// <summary>采样移动输入（0-1 摇杆域）。Tick 内调用。</summary>
+        /// <summary>停止采信输入（非 Owner、或玩家未就绪时调用）。</summary>
+        public void DisableInput()
+        {
+            IsInputEnabled = false;
+        }
+
+        /// <summary>[热路径] 采样移动输入（0-1 摇杆域），Tick 内调用。</summary>
         public Vector2 ReadMove()
         {
-            if (!InputEnabled || _moveAction == null)
+            if (!IsInputEnabled || _moveAction == null)
                 return Vector2.zero;
 
             return _moveAction.ReadValue<Vector2>();
         }
 
-        /// <summary>采样视角输入（鼠标像素增量）。Update 内调用。</summary>
+        /// <summary>[热路径] 采样视角输入（鼠标像素增量），Update 内调用。</summary>
         public Vector2 ReadLook()
         {
-            if (!InputEnabled || _lookAction == null)
+            if (!IsInputEnabled || _lookAction == null)
                 return Vector2.zero;
 
             return _lookAction.ReadValue<Vector2>();
         }
 
+        // [仅 Owner | 事件驱动（ESC 按下）] 只做转发，具体行为由订阅者决定。
         private void OnCancelPerformed(InputAction.CallbackContext context)
         {
             CancelPressed?.Invoke();

@@ -5,8 +5,10 @@ using UnityEngine;
 namespace SphereRoom.Player
 {
     /// <summary>
-    /// M1 非预测版移动：Owner 自己移动，NetworkTransform 把位姿同步给其他端。
-    /// M3 会用 [Replicate] / [Reconcile] + PredictionRigidbody 重写本类（届时本类的 Update 分支整体删除）。
+    /// 玩家移动（M1 非预测版）：Owner 自己在物理域移动与转向，NetworkTransform 把位姿同步给其他端。
+    /// 执行侧：仅本地 Owner 驱动；远端对象只接受同步。
+    /// 迁移：M3 通过**新增**预测组件（[Replicate]/[Reconcile] + PredictionRigidbody）替换本组件，
+    /// 本类属 M1 已验收核心类，按 CODING_STANDARDS §8.1 不再修改。
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(PlayerInputReader))]
@@ -26,6 +28,7 @@ namespace SphereRoom.Player
                 _input = GetComponent<PlayerInputReader>();
         }
 
+        // [双端 | 一次性（OnStartClient）] 判定所有权并只在本地 Owner 上开启输入。
         public override void OnStartClient()
         {
             base.OnStartClient();
@@ -37,11 +40,16 @@ namespace SphereRoom.Player
                 return;
 
             // 只有本地 Owner 采集输入；其余端只接受 NetworkTransform 同步。
-            _input.SetInputEnabled(_isOwner);
+            if (_isOwner)
+                _input.EnableInput();
+            else
+                _input.DisableInput();
+
             if (_isOwner)
                 _input.CancelPressed += OnCancelPressed;
         }
 
+        // [双端 | 一次性（OnStopClient）] 反注册，避免事件悬空。
         public override void OnStopClient()
         {
             base.OnStopClient();
@@ -50,12 +58,13 @@ namespace SphereRoom.Player
                 _input.CancelPressed -= OnCancelPressed;
         }
 
-        /// <summary>累加 Yaw（由 PlayerCamera 在 Update 采样后调用，属本地表现，不进网络结构体）。</summary>
+        /// <summary>[热路径] 累加 Yaw（由 PlayerCamera 在 Update 采样后调用，属本地表现，不进网络结构体）。</summary>
         public void ApplyYawDelta(float degrees)
         {
             _yaw += degrees;
         }
 
+        // [热路径] 转向与位移都在物理域完成，避免与运动学刚体的姿态写回互相覆盖。
         private void FixedUpdate()
         {
             if (!_isOwner || _input == null)
@@ -77,6 +86,7 @@ namespace SphereRoom.Player
             _rigidbody.MovePosition(_rigidbody.position + delta);
         }
 
+        // [仅 Owner | 事件驱动（ESC）] 本地表现：切换光标锁定。
         private void OnCancelPressed()
         {
             Cursor.lockState = Cursor.lockState == CursorLockMode.Locked ? CursorLockMode.None : CursorLockMode.Locked;

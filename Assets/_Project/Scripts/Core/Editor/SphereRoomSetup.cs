@@ -28,13 +28,14 @@ namespace SphereRoom.Core.Editor
     {
         private const string InputActionsPath = "Assets/_Project/Input/SphereRoom.inputactions";
         private const string PlayerPrefabPath = "Assets/_Project/Prefabs/Player.prefab";
-        private const string PlayerMaterialPath = "Assets/_Project/Materials/PlayerGraphic.mat";
-        private const string FloorMaterialPath = "Assets/_Project/Materials/Floor.mat";
+        private const string PlayerMaterialPath = "Assets/_Project/Materials/Mat_PlayerGraphic.mat";
+        private const string FloorMaterialPath = "Assets/_Project/Materials/Mat_Floor.mat";
         private const string BootScenePath = "Assets/_Project/Scenes/Boot.unity";
         private const string RoomScenePath = "Assets/_Project/Scenes/Room.unity";
 
         private const ushort DefaultPort = 7770;
 
+        /// <summary>一键重建全部接线资产：Player 预制体 + Boot/Room 场景。</summary>
         [MenuItem("SphereRoom/Setup/一键重建（Player 预制体 + Boot/Room 场景）", priority = 0)]
         public static void RebuildAll()
         {
@@ -48,6 +49,7 @@ namespace SphereRoom.Core.Editor
             Debug.Log("[SphereRoom] 接线完成：Player 预制体 + Boot/Room 场景已重建，FishNet 可生成预制体列表已刷新。");
         }
 
+        /// <summary>只重建 Player 预制体（改了脚本或预制体结构时用）。</summary>
         [MenuItem("SphereRoom/Setup/仅重建 Player 预制体", priority = 20)]
         public static void RebuildPlayerOnly()
         {
@@ -57,6 +59,7 @@ namespace SphereRoom.Core.Editor
             Debug.Log("[SphereRoom] Player 预制体已重建。");
         }
 
+        /// <summary>只重建 Boot / Room 场景（预制体未变时用）。</summary>
         [MenuItem("SphereRoom/Setup/仅重建场景（Boot + Room）", priority = 21)]
         public static void RebuildScenesOnly()
         {

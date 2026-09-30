@@ -7,6 +7,7 @@ namespace SphereRoom.Player
     /// <summary>
     /// 第一人称相机：仅本地 Owner 启用渲染与俯仰控制。
     /// Yaw 作用在玩家本体（随移动方向、随 NetworkTransform 同步），Pitch 只作用相机支点，不同步。
+    /// 执行侧：仅本地 Owner；远端玩家对象的相机组件会被禁用。
     /// </summary>
     public sealed class PlayerCamera : NetworkBehaviour
     {
@@ -29,6 +30,7 @@ namespace SphereRoom.Player
                 _motor = GetComponent<PlayerMotor>();
         }
 
+        // [双端 | 一次性（OnStartClient）] 非本地 Owner 直接关闭相机渲染，避免多相机竞争。
         public override void OnStartClient()
         {
             base.OnStartClient();
@@ -44,6 +46,7 @@ namespace SphereRoom.Player
             }
         }
 
+        // [热路径] 只做 struct 运算与四元数赋值，无分配。
         private void Update()
         {
             if (!_isOwner || _input == null || _pitchPivot == null)

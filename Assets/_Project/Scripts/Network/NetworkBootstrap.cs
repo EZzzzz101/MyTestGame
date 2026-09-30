@@ -10,6 +10,7 @@ namespace SphereRoom.Network
     /// <summary>
     /// 联机入口：包装 FishNet 的连接启动/停止，以及 Boot → Room 的场景流。
     /// 只负责连接与场景切换，不承载任何玩法状态（玩法状态一律由服务器权威侧持有）。
+    /// 执行侧：Host/Client 两个入口都在本地 UI 侧调用，网络事件回调由 FishNet 触发。
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class NetworkBootstrap : MonoBehaviour
@@ -118,6 +119,7 @@ namespace SphereRoom.Network
             ReportStatus(_mode, "未联机");
         }
 
+        // [服务器 | 事件驱动（服务器连接状态变化）] 主机就绪后加载对局场景。
         private void OnServerConnectionState(ServerConnectionStateArgs args)
         {
             if (args.ConnectionState != LocalConnectionState.Started)
@@ -129,6 +131,7 @@ namespace SphereRoom.Network
             LoadRoomScene();
         }
 
+        // [客户端 | 事件驱动（客户端连接状态变化）] 维护本地联机状态与 UI 文案。
         private void OnClientConnectionState(ClientConnectionStateArgs args)
         {
             switch (args.ConnectionState)
@@ -152,6 +155,7 @@ namespace SphereRoom.Network
         /// 加载对局场景。用全局场景（而非单连接场景），后加入的客户端会自动加载同一场景，
         /// M5「中途加入」依赖这一行为。
         /// </summary>
+        // [服务器 | 一次性] 只在主机启动后触发一次。
         private void LoadRoomScene()
         {
             if (!_loadRoomSceneOnHostStart || _roomLoadRequested)
