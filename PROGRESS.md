@@ -12,11 +12,13 @@
 | Unity | 6000.3.14f1 ✅ |
 | 渲染管线 | URP 17.3.0（模板自带）✅ |
 | 输入 | Input System 1.19.0，`activeInputHandler = Input System` ✅ |
-| 网络框架 | FishNet 4 ❌ 未安装 |
-| 多开测试 | ParrelSync ❌ 未安装 |
-| 目录/asmdef | `Assets/_Project`、`SphereRoom.*` ❌ 未建 |
-| 场景 | 仅模板 `Assets/Scenes/SampleScene.unity`；Boot / Room 待建 |
+| 网络框架 | FishNet 4.7.3（tag 锁定，包内声明 4.7.2）✅ 已装并解析 |
+| 多开测试 | ParrelSync 1.5.3 ✅ 已装，待克隆验证 |
+| 目录/asmdef | ✅ `Assets/_Project` + 5 个 asmdef（SphereRoom.Core/Network/Player/Ball/UI），已引用 `FishNet.Runtime` |
+| 场景 | ✅ `Boot.unity` / `Room.unity` 已建并入 Build Settings（Boot 索引 0），待 Unity 导入校验 |
 | Git | ✅ 已初始化（`main`，首个提交 `cb7232e`） |
+
+模板遗留待清理（不影响运行）：`Assets/Scenes/SampleScene.unity`、`Assets/Readme.asset`、`Assets/InputSystem_Actions.inputactions`（M1 迁入 `_Project/Input/` 并改名）。
 
 ---
 
@@ -55,7 +57,7 @@ M0 工程基线
 
 ## 3. 里程碑清单
 
-### [ ] M0 工程基线
+### [~] M0 工程基线（依赖/目录/asmdef/场景已就位，待 Unity 导入校验 + ParrelSync 克隆验证）
 
 **目标**：工程可编译、可多开、目录与版本规范就位，之后所有节点都在这套基线上开工。
 
