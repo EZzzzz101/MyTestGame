@@ -18,7 +18,7 @@
 | 场景 | ✅ `Boot.unity` / `Room.unity` 已建并入 Build Settings（Boot 索引 0），待 Unity 导入校验 |
 | Git | ✅ 已初始化（`main`，首个提交 `cb7232e`） |
 
-模板遗留待清理（不影响运行）：`Assets/Scenes/SampleScene.unity`、`Assets/Readme.asset`、`Assets/InputSystem_Actions.inputactions`（M1 迁入 `_Project/Input/` 并改名）。
+模板遗留清理：`Assets/Scenes/SampleScene.unity`、`Assets/Readme.asset` 已删；仅剩 `Assets/InputSystem_Actions.inputactions` 待 M1 迁入 `_Project/Input/` 并改名 `SphereRoom.inputactions`。
 
 ---
 
@@ -70,7 +70,7 @@ M0 工程基线
 - ProjectSettings 基线：Physics 交给 FishNet `PhysicsSimulator`（Script 模式）、`Time.fixedDeltaTime = 0.02`；NetworkManager 的 TickRate = 50（M1 落地）。
 - 确认 Windows Standalone x64 为目标平台。
 
-**完成定义（DoD）**：Editor 编译 0 error；ParrelSync 克隆实例能进 Play；`git log` 有本条提交。
+**完成定义（DoD）**：Editor 编译 0 error；ParrelSync 克隆实例能进 Play（入口是**顶级菜单** `ParrelSync > Clones Manager`，**不在 Window 菜单下**）；`git log` 有本条提交。
 **风险**：FishNet 的包路径/asmdef 名需按包内实际内容确认，不凭记忆写。
 
 ---
@@ -91,6 +91,9 @@ M0 工程基线
   - 脚本命名 `PlayerInputReader`（避免与 `UnityEngine.InputSystem.PlayerInput` 撞名）；
   - 输入资产：**把模板 `Assets/InputSystem_Actions.inputactions` 移入 `Assets/_Project/Input/` 并改名 `SphereRoom.inputactions`**（当前无任何引用依赖模板资产，移动安全；遵守"自制资源不落 Assets 根"纪律），在其中加 Move/Look/ESC 等 Action；
   - 采样策略：**Move 在 `OnTick` 内 `ReadValue` 采样**（进 `MoveInput` 结构体随 Replicate 上行）；**Look（鼠标 delta）在 `Update` 采样并即时应用相机旋转**（视角是本地表现，不等 Tick，Pitch 不同步）；ESC 在 Update 采样控制光标/UI。生成 C# Class 或直接资产引用二选一，代码侧不 `Load` 字符串路径。
+- 归置 FishNet 自动生成物：FishNet 生成器默认把 `DefaultPrefabObjects.asset` 丢在 **Assets 根**（路径可在 `Edit > Project Settings > FishNet` 修改）。建 NetworkManager 时把它移到 `_Project/Network/`，保持「自制资源不落 Assets 根」纪律。
+- 场景清理：`Boot`/`Room` 目前是 URP 模板场景的副本（含 Main Camera / 平行光 / Global Volume）。`Room` 的 Main Camera 必须在玩家相机生效时禁用或移除，避免双相机竞争。
+- 已知正常副作用：FishNet 安装时自动写入 `scriptingDefineSymbols: Standalone: FISHNET;FISHNET_V4`，属预期行为，不要手工删除。
 
 **完成定义**：ParrelSync 双开，A Host / B Join，两端互见对方移动与朝向；断线不崩。
 **注意**：本节点故意不上预测，先把「连接 + 场景 + Spawn + 输入」链路跑通，M3 再换成预测移动。
