@@ -153,3 +153,4 @@ Assets/
 - 所有 FishNet API 调用先对照包内 `Demos/`（预测部分见 `Demos/Prediction/Rigidbody`）确认签名，不确定就打开包源码读，不要猜；
 - 物理调参（弹性/摩擦/平滑）集中放在一个 `PhysicsTuning` 常量类，便于迭代；
 - 遇到预测不同步问题，优先检查：TickRate 与 fixedDeltaTime 是否对齐、reconcile 频率、图形平滑设置，而不是先怀疑网络。
+- **节点收尾走检查点流程**：见 `.codex/skills/sphere-room-checkpoint/SKILL.md` —— 对照节点完成定义验收 → 按 `CODING_STANDARDS.md` §10 自查 → 勾选 `PROGRESS.md` 并追加完工提交记录 → 独立提交（不 squash）。Agent 判断某个节点完工时，应主动提醒用户执行该检查点。
