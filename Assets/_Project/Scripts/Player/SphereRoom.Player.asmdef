@@ -3,7 +3,8 @@
     "rootNamespace": "SphereRoom.Player",
     "references": [
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
-        "GUID:8f2a71c4d5e64b3f9a0c1d2e3f405162"
+        "GUID:8f2a71c4d5e64b3f9a0c1d2e3f405162",
+        "GUID:75469ad4d38634e559750d17036d5f7c"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
