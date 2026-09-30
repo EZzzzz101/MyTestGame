@@ -13,9 +13,11 @@
 | 渲染管线 | URP 17.3.0（模板自带）✅ |
 | 输入 | Input System 1.19.0，`activeInputHandler = Input System` ✅ |
 | 网络框架 | FishNet 4.7.3（tag 锁定，包内声明 4.7.2）✅ 已装并解析 |
-| 多开测试 | ParrelSync 1.5.3 ✅ 已装，待克隆验证 |
-| 目录/asmdef | ✅ `Assets/_Project` + 5 个 asmdef（SphereRoom.Core/Network/Player/Ball/UI），已引用 `FishNet.Runtime` |
-| 场景 | ✅ `Boot.unity` / `Room.unity` 已建并入 Build Settings（Boot 索引 0），待 Unity 导入校验 |
+| 多开测试 | ParrelSync 1.5.3 ✅ 克隆可开可 Play（M0 验收通过） |
+| 目录/asmdef | ✅ `Assets/_Project` + 6 个 asmdef（Core/Network/Player/Ball/UI + Core.Editor），GUID 引用 FishNet.Runtime / Unity.InputSystem / UnityEngine.UI |
+| 场景 | ✅ `Boot`/`Room` 已生成并进 Build Settings（Boot 索引 0）；Room 目前仅地板，墙/柱/球归 M2 |
+| 输入资产 | ✅ `_Project/Input/SphereRoom.inputactions`（模板资产迁入改名，GUID 不变，引用未失效） |
+| 接线工具 | ✅ `SphereRoom > Setup > 一键重建`（Editor 工具，可重复执行，只做资产组装） |
 | Git | ✅ 已初始化（`main`，首个提交 `cb7232e`） |
 
 模板遗留清理：`Assets/Scenes/SampleScene.unity`、`Assets/Readme.asset` 已删；仅剩 `Assets/InputSystem_Actions.inputactions` 待 M1 迁入 `_Project/Input/` 并改名 `SphereRoom.inputactions`。
@@ -75,7 +77,7 @@ M0 工程基线
 
 ---
 
-### [~] M1 联机骨架（P0-1 / P0-3 前半）（运行时脚本已落地，待 Boot 场景/Player 预制体接线与双开验证）
+### [x] M1 联机骨架（P0-1 / P0-3 前半）
 
 **目标**：两台 Editor 实例能 Host/Join 相连并互见移动的玩家。
 
@@ -97,6 +99,7 @@ M0 工程基线
 
 **完成定义**：ParrelSync 双开，A Host / B Join，两端互见对方移动与朝向；断线不崩。
 **注意**：本节点故意不上预测，先把「连接 + 场景 + Spawn + 输入」链路跑通，M3 再换成预测移动。
+**完工**：`8d04a14`（2026-10-01）— 双开 Host/Join 互见移动已验收通过；收尾时按新增 §6/§7/§8 完成合规整改（命名、热路径与网络注释、材质改名）。M1 的 `PlayerMotor` 自此冻结，M3 以新增预测组件替换，不再回改本类（§8.1）。
 
 ---
 
@@ -123,6 +126,7 @@ M0 工程基线
 - `Player` 逻辑根挂 `PredictionRigidbody`；物理改由 FishNet `PhysicsSimulator` 手动步进。
 - 输入结构体 `MoveInput { Vector2 Move; float Yaw; }`（Pitch 只作用本地相机，不同步）。
 - 移动逻辑写进 `[Replicate]` 方法（每 Tick 采集输入上行），`[Reconcile]` 内回滚重放。
+- 实施方式（§8.1）：**新增** `PlayerPredictedMotor` 组件并在预制体上替换 M1 的 `PlayerMotor`，不回改已验收的核心类。
 - 服务器侧输入验证：速度上限 clamp、位置越界回正。
 - 远程玩家朝向用低频 SyncVar（yaw）仅作视觉。
 
