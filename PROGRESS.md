@@ -59,7 +59,7 @@ M0 工程基线
 
 ## 3. 里程碑清单
 
-### [~] M0 工程基线（依赖/目录/asmdef/场景已就位，待 Unity 导入校验 + ParrelSync 克隆验证）
+### [x] M0 工程基线
 
 **目标**：工程可编译、可多开、目录与版本规范就位，之后所有节点都在这套基线上开工。
 
@@ -74,6 +74,7 @@ M0 工程基线
 
 **完成定义（DoD）**：Editor 编译 0 error；ParrelSync 克隆实例能进 Play（入口是**顶级菜单** `ParrelSync > Clones Manager`，**不在 Window 菜单下**）；`git log` 有本条提交。
 **风险**：FishNet 的包路径/asmdef 名需按包内实际内容确认，不凭记忆写。
+**完工**：`bb015d9`→`14ff5e5`（2026-09-30/10-01）— 依赖安装、目录与 asmdef、Boot/Room 场景、Git 初始化全部就位；ParrelSync 克隆可打开并进 Play（2026-10-01 复核确认）。
 
 ---
 
