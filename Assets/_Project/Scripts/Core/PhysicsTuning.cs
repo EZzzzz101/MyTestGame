@@ -36,6 +36,12 @@ namespace SphereRoom.Core
         /// <summary>出生点相对地面的高度。</summary>
         public const float PlayerSpawnHeight = 1.2f;
 
+        /// <summary>下落速度上限（避免高处掉落穿透地面），米/秒。</summary>
+        public const float MaxFallSpeed = -20f;
+
+        /// <summary>落地后给的小额向下速度：让 CC 贴住地面，避免走下坡时反复离地。</summary>
+        public const float GroundedStickSpeed = -2f;
+
         // ---- 共享球与房间（M2 起使用）----
 
         /// <summary>球与墙面/柱子的弹性（0.65：弹回观感与同步稳定的折中值）。</summary>

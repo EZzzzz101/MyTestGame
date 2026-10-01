@@ -1176,6 +1176,7 @@ GameObject:
   - component: {fileID: 1645781607}
   - component: {fileID: 1645781606}
   - component: {fileID: 1645781604}
+  - component: {fileID: 1645781611}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -1309,6 +1310,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1645781611
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1645781603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 105103e071a202747812b714e54c732e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SphereRoom.UI::SphereRoom.UI.NetworkDebugHud
+  _networkManager: {fileID: 0}
+  _statsText: {fileID: 0}
 --- !u!1 &1991454432
 GameObject:
   m_ObjectHideFlags: 0

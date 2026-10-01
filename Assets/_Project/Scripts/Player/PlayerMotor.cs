@@ -18,14 +18,19 @@ namespace SphereRoom.Player
     {
         [SerializeField] private PlayerInputReader _input;
         [SerializeField] private float _moveSpeed = PhysicsTuning.PlayerMoveSpeed;
+        [SerializeField] private float _maxFallSpeed = PhysicsTuning.MaxFallSpeed;
 
         private CharacterController _controller;
+        private Rigidbody _rigidbody;
         private bool _isOwner;
         private float _yaw;
+        private float _verticalVelocity;
 
         private void Awake()
         {
             _controller = GetComponent<CharacterController>();
+            // 运动学刚体只用于与球体产生 PhysX 接触；缺失时只是推不动球，不影响移动。
+            _rigidbody = GetComponent<Rigidbody>();
             if (_input == null)
                 _input = GetComponent<PlayerInputReader>();
         }
@@ -77,13 +82,27 @@ namespace SphereRoom.Player
             // CC 不管理旋转：直接写 Transform。此时位移不再经过刚体，不存在"两个域互相覆盖"的问题。
             transform.rotation = rotation;
 
-            Vector2 move = _input.ReadMove();
-            if (move.sqrMagnitude <= 0f)
-                return;
+            // CC 不做重力：自己累积垂直速度（包内 CC 示例同法），否则玩家会停在出生高度不落地。
+            _verticalVelocity += Physics.gravity.y * Time.deltaTime;
+            if (_verticalVelocity < _maxFallSpeed)
+                _verticalVelocity = _maxFallSpeed;
 
+            Vector2 move = _input.ReadMove();
             // 方向由 Yaw 直接算出，不读取 transform（Transform 的旋转要下一帧才反映到 forward）。
             Vector3 direction = rotation * new Vector3(move.x, 0f, move.y);
-            _controller.Move(direction * (_moveSpeed * Time.deltaTime));
+
+            Vector3 motion = direction * (_moveSpeed * Time.deltaTime);
+            motion.y = _verticalVelocity * Time.deltaTime;
+            _controller.Move(motion);
+
+            if (_controller.isGrounded && _verticalVelocity < 0f)
+                _verticalVelocity = PhysicsTuning.GroundedStickSpeed;
+
+            // CC 的位移只写 Transform，PhysX 看不到扫掠；再驱动一次运动学刚体，
+            // 球（动态）才能被真实推动（kinematic × dynamic 才产生接触）。目标点取 CC 解算后的位置，
+            // 因此撞墙被挡住的那部分位移不会把球一起顶穿墙。
+            if (_rigidbody != null)
+                _rigidbody.MovePosition(transform.position);
         }
 
         // [仅 Owner | 事件驱动（ESC）] 本地表现：切换光标锁定。
