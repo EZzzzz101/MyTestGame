@@ -245,7 +245,9 @@ namespace SphereRoom.Core.Editor
                 AssetDatabase.CreateAsset(material, BallPhysicsMaterialPath);
             }
 
-            material.friction = PhysicsTuning.Friction;
+            // PhysicsMaterial 沿用 PhysicMaterial 的分法：动/静摩擦分开设置（没有统一的 friction 属性）。
+            material.dynamicFriction = PhysicsTuning.Friction;
+            material.staticFriction = PhysicsTuning.Friction;
             material.bounciness = PhysicsTuning.Bounciness;
             // 取最大值：球撞墙/柱时以球的弹性为准，避免默认平均把弹回打折。
             material.bounceCombine = PhysicsMaterialCombine.Maximum;
