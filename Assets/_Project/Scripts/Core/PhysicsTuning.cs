@@ -50,6 +50,18 @@ namespace SphereRoom.Core
         /// <summary>球生成高度。</summary>
         public const float BallSpawnHeight = 2f;
 
+        /// <summary>球的质量（比玩家重一些，推起来有惯性但不会被一碰就飞）。</summary>
+        public const float BallMass = 2f;
+
+        /// <summary>球的线性阻尼（0.05：滚得久但不停不下来）。</summary>
+        public const float BallDrag = 0.05f;
+
+        /// <summary>球的角阻尼。</summary>
+        public const float BallAngularDrag = 0.05f;
+
+        /// <summary>低于该相对速度的接触不算撞击（避免球静置贴墙时反复触发事件），米/秒。</summary>
+        public const float MinImpactSpeed = 1.5f;
+
         /// <summary>场景内球数量上限，超限销毁最旧的。</summary>
         public const int MaxBallCount = 8;
 

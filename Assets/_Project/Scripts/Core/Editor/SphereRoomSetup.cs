@@ -5,6 +5,7 @@ using FishNet.Managing.Timing;
 using FishNet.Managing.Transporting;
 using FishNet.Object;
 using FishNet.Transporting.Tugboat;
+using SphereRoom.Ball;
 using SphereRoom.Network;
 using SphereRoom.Player;
 using SphereRoom.UI;
@@ -28,25 +29,39 @@ namespace SphereRoom.Core.Editor
     {
         private const string InputActionsPath = "Assets/_Project/Input/SphereRoom.inputactions";
         private const string PlayerPrefabPath = "Assets/_Project/Prefabs/Player.prefab";
+        private const string BallPrefabPath = "Assets/_Project/Prefabs/SharedBall.prefab";
         private const string PlayerMaterialPath = "Assets/_Project/Materials/Mat_PlayerGraphic.mat";
         private const string FloorMaterialPath = "Assets/_Project/Materials/Mat_Floor.mat";
+        private const string WallMaterialPath = "Assets/_Project/Materials/Mat_Wall.mat";
+        private const string PillarMaterialPath = "Assets/_Project/Materials/Mat_Pillar.mat";
+        private const string BallMaterialPath = "Assets/_Project/Materials/Mat_Ball.mat";
+        private const string BallPhysicsMaterialPath = "Assets/_Project/Materials/Phys_Ball.physicMaterial";
         private const string BootScenePath = "Assets/_Project/Scenes/Boot.unity";
         private const string RoomScenePath = "Assets/_Project/Scenes/Room.unity";
 
         private const ushort DefaultPort = 7770;
 
-        /// <summary>一键重建全部接线资产：Player 预制体 + Boot/Room 场景。</summary>
-        [MenuItem("SphereRoom/Setup/一键重建（Player 预制体 + Boot/Room 场景）", priority = 0)]
+        // 房间原型尺寸（Cube 拼接；物理参数集中在 PhysicsTuning）
+        private const float RoomSize = 20f;
+        private const float WallHeight = 3f;
+        private const float WallThickness = 0.6f;
+        private const float CeilingThickness = 0.5f;
+        private const float PillarSize = 0.8f;
+        private const int BallSpawnPointCount = 4;
+
+        /// <summary>一键重建全部接线资产：SharedBall / Player 预制体 + Boot/Room 场景。</summary>
+        [MenuItem("SphereRoom/Setup/一键重建（预制体 + Boot/Room 场景）", priority = 0)]
         public static void RebuildAll()
         {
+            NetworkObject ballPrefab = BuildSharedBallPrefab();
             NetworkObject playerPrefab = BuildPlayerPrefab();
-            BuildRoomScene();
+            BuildRoomScene(ballPrefab);
             BuildBootScene(playerPrefab);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log("[SphereRoom] 接线完成：Player 预制体 + Boot/Room 场景已重建，FishNet 可生成预制体列表已刷新。");
+            Debug.Log("[SphereRoom] 接线完成：SharedBall / Player 预制体 + Boot/Room 场景已重建，FishNet 可生成预制体列表已刷新。");
         }
 
         /// <summary>只重建 Player 预制体（改了脚本或预制体结构时用）。</summary>
@@ -59,19 +74,30 @@ namespace SphereRoom.Core.Editor
             Debug.Log("[SphereRoom] Player 预制体已重建。");
         }
 
+        /// <summary>只重建 SharedBall 预制体（改了球脚本或球的层级时用）。</summary>
+        [MenuItem("SphereRoom/Setup/仅重建 SharedBall 预制体", priority = 22)]
+        public static void RebuildBallOnly()
+        {
+            BuildSharedBallPrefab();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[SphereRoom] SharedBall 预制体已重建。");
+        }
+
         /// <summary>只重建 Boot / Room 场景（预制体未变时用）。</summary>
         [MenuItem("SphereRoom/Setup/仅重建场景（Boot + Room）", priority = 21)]
         public static void RebuildScenesOnly()
         {
-            GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
-            if (prefabAsset == null)
+            GameObject playerAsset = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+            GameObject ballAsset = AssetDatabase.LoadAssetAtPath<GameObject>(BallPrefabPath);
+            if (playerAsset == null || ballAsset == null)
             {
-                Debug.LogError("[SphereRoom] 找不到 Player 预制体，请先执行「仅重建 Player 预制体」。");
+                Debug.LogError("[SphereRoom] 找不到 Player / SharedBall 预制体，请先执行对应的「仅重建 … 预制体」。");
                 return;
             }
 
-            BuildRoomScene();
-            BuildBootScene(prefabAsset.GetComponent<NetworkObject>());
+            BuildRoomScene(ballAsset.GetComponent<NetworkObject>());
+            BuildBootScene(playerAsset.GetComponent<NetworkObject>());
             AssetDatabase.SaveAssets();
             Debug.Log("[SphereRoom] Boot / Room 场景已重建。");
         }
@@ -159,18 +185,90 @@ namespace SphereRoom.Core.Editor
 
         #endregion
 
+        #region SharedBall 预制体
+
+        /// <summary>
+        /// SharedBall 预制体：逻辑根（网络 / 物理 / 事件源）+ Graphic 子物体（渲染，换足球只改这里）。
+        /// 层级纪律见 AGENTS §5.4：Graphic 缩放由 PhysicsTuning.BallRadius 推导，换 Mesh 不改物理尺寸。
+        /// </summary>
+        private static NetworkObject BuildSharedBallPrefab()
+        {
+            Material ballMaterial = GetOrCreateUrpMaterial(BallMaterialPath, new Color(0.92f, 0.92f, 0.88f));
+            PhysicsMaterial ballPhysicsMaterial = GetOrCreateBallPhysicsMaterial();
+
+            GameObject root = new GameObject("SharedBall");
+
+            root.AddComponent<NetworkObject>();
+
+            Rigidbody rigidbody = root.AddComponent<Rigidbody>();
+            rigidbody.mass = PhysicsTuning.BallMass;
+            // Unity 6 起 drag/angularDrag 更名为 linearDamping/angularDamping（旧名已标记废弃）。
+            rigidbody.linearDamping = PhysicsTuning.BallDrag;
+            rigidbody.angularDamping = PhysicsTuning.BallAngularDrag;
+
+            SphereCollider sphereCollider = root.AddComponent<SphereCollider>();
+            sphereCollider.radius = PhysicsTuning.BallRadius;
+            // 用 sharedMaterial：预制体上不实例化材质（material 会为每个实例复制一份）。
+            sphereCollider.sharedMaterial = ballPhysicsMaterial;
+
+            // M2 临时方案：服务器权威 + 由组件把客户端副本切成运动学（NetworkTransform.CanMakeKinematic）。
+            // TODO(M4): 换成 reconcile-only 预测（BallPrediction + PredictionRigidbody），本组件移除。
+            NetworkTransform networkTransform = root.AddComponent<NetworkTransform>();
+            SerializedObject transformSettings = new SerializedObject(networkTransform);
+            transformSettings.FindProperty("_componentConfiguration").enumValueIndex = 2;
+            transformSettings.FindProperty("_clientAuthoritative").boolValue = false;
+            transformSettings.ApplyModifiedPropertiesWithoutUndo();
+
+            root.AddComponent<BallImpactDispatcher>();
+
+            GameObject graphic = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            graphic.name = "Graphic";
+            Object.DestroyImmediate(graphic.GetComponent<Collider>());
+            graphic.transform.SetParent(root.transform, false);
+            graphic.GetComponent<MeshRenderer>().sharedMaterial = ballMaterial;
+            // 内置球体 Mesh 半径 0.5：按物理半径缩放，保证视觉尺寸与碰撞体一致。
+            float graphicScale = PhysicsTuning.BallRadius / 0.5f;
+            graphic.transform.localScale = new Vector3(graphicScale, graphicScale, graphicScale);
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, BallPrefabPath);
+            Object.DestroyImmediate(root);
+
+            return prefab.GetComponent<NetworkObject>();
+        }
+
+        private static PhysicsMaterial GetOrCreateBallPhysicsMaterial()
+        {
+            PhysicsMaterial material = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(BallPhysicsMaterialPath);
+            if (material == null)
+            {
+                material = new PhysicsMaterial("Phys_Ball");
+                AssetDatabase.CreateAsset(material, BallPhysicsMaterialPath);
+            }
+
+            material.friction = PhysicsTuning.Friction;
+            material.bounciness = PhysicsTuning.Bounciness;
+            // 取最大值：球撞墙/柱时以球的弹性为准，避免默认平均把弹回打折。
+            material.bounceCombine = PhysicsMaterialCombine.Maximum;
+            material.frictionCombine = PhysicsMaterialCombine.Average;
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        #endregion
+
         #region 场景
 
         /// <summary>
-        /// Room 场景：M1 只放地板与光（保证能站着看得到彼此），墙/柱/球归 M2。
+        /// Room 场景：Cube 拼地板 / 四墙 / 顶棚 + 4 根障碍柱 + GameManager（球生成器）。
         /// 不放相机与 AudioListener，避免与玩家自带的相机冲突。
         /// </summary>
-        private static void BuildRoomScene()
+        private static void BuildRoomScene(NetworkObject ballPrefab)
         {
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             CreateDirectionalLight();
-            CreateFloor();
+            CreateRoomGeometry();
+            CreateGameManager(ballPrefab);
 
             EditorSceneManager.SaveScene(scene, RoomScenePath);
             RegisterScenesToBuildSettings();
@@ -201,16 +299,88 @@ namespace SphereRoom.Core.Editor
             lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
         }
 
-        private static void CreateFloor()
+        /// <summary>
+        /// 房间几何：Cube 拼地板 / 四墙 / 顶棚 / 4 柱。静态 Collider，不带 NetworkObject
+        /// —— Room 是全局场景，各端各自加载同一份静态几何。
+        /// </summary>
+        private static void CreateRoomGeometry()
         {
             // URP 下 CreatePrimitive 自带的是内置管线材质（会渲染成品红），必须换成 URP/Lit 材质。
             Material floorMaterial = GetOrCreateUrpMaterial(FloorMaterialPath, new Color(0.55f, 0.56f, 0.60f));
+            Material wallMaterial = GetOrCreateUrpMaterial(WallMaterialPath, new Color(0.38f, 0.40f, 0.46f));
+            Material pillarMaterial = GetOrCreateUrpMaterial(PillarMaterialPath, new Color(0.28f, 0.30f, 0.34f));
+            PhysicsMaterial physicsMaterial = GetOrCreateBallPhysicsMaterial();
 
-            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            floor.name = "Floor";
-            floor.GetComponent<MeshRenderer>().sharedMaterial = floorMaterial;
-            floor.transform.localScale = new Vector3(20f, 1f, 20f);
-            floor.transform.position = new Vector3(0f, -0.5f, 0f);
+            GameObject room = new GameObject("Room");
+            float half = RoomSize * 0.5f;
+            float wallY = WallHeight * 0.5f;
+
+            CreateCube(room.transform, "Floor", floorMaterial, physicsMaterial,
+                new Vector3(0f, -0.5f, 0f), new Vector3(RoomSize, 1f, RoomSize));
+            CreateCube(room.transform, "Ceiling", floorMaterial, physicsMaterial,
+                new Vector3(0f, WallHeight, 0f), new Vector3(RoomSize, CeilingThickness, RoomSize));
+
+            CreateCube(room.transform, "Wall North", wallMaterial, physicsMaterial,
+                new Vector3(0f, wallY, half), new Vector3(RoomSize, WallHeight, WallThickness));
+            CreateCube(room.transform, "Wall South", wallMaterial, physicsMaterial,
+                new Vector3(0f, wallY, -half), new Vector3(RoomSize, WallHeight, WallThickness));
+            CreateCube(room.transform, "Wall East", wallMaterial, physicsMaterial,
+                new Vector3(half, wallY, 0f), new Vector3(WallThickness, WallHeight, RoomSize));
+            CreateCube(room.transform, "Wall West", wallMaterial, physicsMaterial,
+                new Vector3(-half, wallY, 0f), new Vector3(WallThickness, WallHeight, RoomSize));
+
+            // 4 根柱子放在四角内侧：不挡出生点，又能保证“推球撞柱真实弹回”可验证。
+            float pillarOffset = half * 0.5f;
+            CreateCube(room.transform, "Pillar NE", pillarMaterial, physicsMaterial,
+                new Vector3(pillarOffset, wallY, pillarOffset), new Vector3(PillarSize, WallHeight, PillarSize));
+            CreateCube(room.transform, "Pillar NW", pillarMaterial, physicsMaterial,
+                new Vector3(-pillarOffset, wallY, pillarOffset), new Vector3(PillarSize, WallHeight, PillarSize));
+            CreateCube(room.transform, "Pillar SE", pillarMaterial, physicsMaterial,
+                new Vector3(pillarOffset, wallY, -pillarOffset), new Vector3(PillarSize, WallHeight, PillarSize));
+            CreateCube(room.transform, "Pillar SW", pillarMaterial, physicsMaterial,
+                new Vector3(-pillarOffset, wallY, -pillarOffset), new Vector3(PillarSize, WallHeight, PillarSize));
+        }
+
+        /// <summary>
+        /// GameManager：Room 场景内的 NetworkObject（服务器侧自动生成），当前只挂 BallSpawner。
+        /// M8 的 TappedDispatcher 按 §8.1 以新增组件接入，不改本方法生成的既有组件。
+        /// </summary>
+        private static void CreateGameManager(NetworkObject ballPrefab)
+        {
+            GameObject manager = new GameObject("GameManager");
+            manager.AddComponent<NetworkObject>();
+
+            // 球生成点：绕房间中部均匀分布，Y 取 PhysicsTuning.BallSpawnHeight。
+            GameObject spawnRoot = new GameObject("Ball Spawn Points");
+            Transform[] spawnPoints = new Transform[BallSpawnPointCount];
+            for (int i = 0; i < BallSpawnPointCount; i++)
+            {
+                float angle = (360f / BallSpawnPointCount) * i * Mathf.Deg2Rad;
+                Vector3 position = new Vector3(Mathf.Cos(angle) * 4f, PhysicsTuning.BallSpawnHeight, Mathf.Sin(angle) * 4f);
+
+                GameObject point = new GameObject($"Ball Spawn Point {i}");
+                point.transform.SetParent(spawnRoot.transform, false);
+                point.transform.position = position;
+                spawnPoints[i] = point.transform;
+            }
+
+            BallSpawner spawner = manager.AddComponent<BallSpawner>();
+            SetObjectReference(spawner, "_ballPrefab", ballPrefab);
+            SetObjectReferenceArray(spawner, "_spawnPoints", spawnPoints);
+            SetInt(spawner, "_initialBallCount", 1);
+        }
+
+        private static void CreateCube(Transform parent, string name, Material material, PhysicsMaterial physicsMaterial, Vector3 position, Vector3 scale)
+        {
+            GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cube.name = name;
+            cube.transform.SetParent(parent, false);
+            cube.transform.position = position;
+            cube.transform.localScale = scale;
+            cube.GetComponent<MeshRenderer>().sharedMaterial = material;
+
+            if (physicsMaterial != null)
+                cube.GetComponent<Collider>().sharedMaterial = physicsMaterial;
         }
 
         /// <summary>
@@ -413,6 +583,23 @@ namespace SphereRoom.Core.Editor
             }
 
             property.stringValue = value;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetObjectReferenceArray(Object target, string propertyName, Object[] values)
+        {
+            SerializedObject serialized = new SerializedObject(target);
+            SerializedProperty property = serialized.FindProperty(propertyName);
+            if (property == null)
+            {
+                Debug.LogError($"[SphereRoom] 字段不存在：{target.GetType().Name}.{propertyName}");
+                return;
+            }
+
+            property.arraySize = values.Length;
+            for (int i = 0; i < values.Length; i++)
+                property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
