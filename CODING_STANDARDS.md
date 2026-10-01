@@ -134,9 +134,11 @@ Physics.RaycastNonAlloc(...)
 
 1. `Time.fixedDeltaTime = 0.02` 且 `TimeManager.TickRate = 50`，**任何人不得单独修改其一**（Tick-物理对齐是预测正确性的前提）；
 2. 物理模拟走 `PhysicsSimulator`（Script 模式），禁止其他脚本调用 `Physics.Simulate()`；
-3. 预测对象（玩家、球）必须挂 `PredictionRigidbody`；逻辑体与图形体分离，Renderer 挂图形子对象；
-4. 物理材质参数（弹性/摩擦）集中在 `PhysicsTuning` 常量类，禁止 Inspector 内散落魔法数；
-5. 碰撞响应逻辑（Tapped 判定）只在服务器 `OnCollisionEnter` 中处理。
+3. **球**（预测对象）必须挂 `PredictionRigidbody`；**玩家是 Kinematic，禁止挂 `PredictionRigidbody`**（该组件靠写入 velocity 驱动，Kinematic 会忽略 velocity），玩家用位置驱动 + 自 sweep 解算（见 `PHYSICS_DESIGN.md`）；逻辑体与图形体分离，Renderer 挂图形子对象；
+4. **玩家的水平位移必须经 `Physics.CapsuleCast` 自 sweep 解算后才可写入**（迭代次数固定、掩码只含 `World` 层）；**禁止**把玩家位置直接交给 PhysX 求解（Kinematic 与静态体在默认 `Contact Pairs Mode` 下不产生接触，会穿墙）；**禁止**修改 Physics 的 `Contact Pairs Mode`；
+5. **物理查询的分配规则**：`Physics.CapsuleCast` / `SphereCast` / `Raycast`（单结果版本，带 `out RaycastHit`）**本身无堆分配，直接用，不要换成 `*NonAlloc`**（`CapsuleCastNonAlloc` 是给"多结果"场景的，本项目的移动解算只需要单个结果）；需要多结果时才用 `Overlap*NonAlloc` + 预分配缓冲区；
+6. 物理材质参数（弹性/摩擦）与解算常量（`MoveSlideIterations` / `MoveSkinWidth` / 层掩码 等）集中在 `PhysicsTuning` 常量类，禁止 Inspector 内散落魔法数或组件内裸数字；
+7. 碰撞响应逻辑（Tapped 判定）只在服务器 `OnCollisionEnter` 中处理。
 
 ## 6. 命名规范（全项目统一，Agent 生成代码逐条对照）
 
@@ -289,7 +291,7 @@ private void RpcBallSpawned(...)
 
 **性能与网络**
 - [ ] 热路径（Update/FixedUpdate/OnTick/RPC/物理回调）内无：字符串拼接、装箱拆箱、LINQ、闭包、`new` 引用类型、`GetComponent`/`Find*`、`Debug.Log`、`params`、接口 foreach；
-- [ ] 物理查询使用 NonAlloc 重载；
+- [ ] 多结果物理查询用 `Overlap*NonAlloc` + 预分配缓冲区；单结果查询用 `CapsuleCast`/`SphereCast`（零分配，勿套 NonAlloc）；
 - [ ] 网络计时全部基于 Tick；
 - [ ] 共享状态只由服务器写入；输入在服务器侧被验证/clamp；
 - [ ] 对象池覆盖高频生成/销毁路径；TickRate/fixedDeltaTime 未被单独改动。

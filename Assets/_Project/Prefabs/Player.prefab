@@ -139,7 +139,7 @@ GameObject:
   - component: {fileID: 6400650492036641122}
   - component: {fileID: 4599389178806121297}
   - component: {fileID: 3420507768506036189}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -179,14 +179,14 @@ MonoBehaviour:
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
-  _enablePrediction: 0
+  _enablePrediction: 1
   _predictionType: 0
   _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 1
   _networkTransform: {fileID: 0}
-  _ownerInterpolation: 1
+  _ownerInterpolation: 2
   _ownerSmoothedProperties: 255
   _adaptiveInterpolation: 3
   _spectatorSmoothedProperties: 255
@@ -246,11 +246,11 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 0
-  m_Interpolate: 1
+  m_UseGravity: 0
+  m_IsKinematic: 1
+  m_Interpolate: 0
   m_Constraints: 56
-  m_CollisionDetection: 0
+  m_CollisionDetection: 3
 --- !u!136 &8331204391574267647
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -342,14 +342,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 8827097034370043062}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0ac3f6d75144c3e4b8fb11584a34784c, type: 3}
+  m_Script: {fileID: 11500000, guid: 7f3c9d51b8a24e0d9c6f5a4b3e2d1c08, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: SphereRoom.Player::SphereRoom.Player.PlayerMotor
+  m_EditorClassIdentifier: SphereRoom.Player::SphereRoom.Player.PlayerPredictedMotor
   _componentIndexCache: 1
   _addedNetworkObject: {fileID: 7610141440112010408}
   _networkObjectCache: {fileID: 7610141440112010408}
   _input: {fileID: 2161694379724549707}
   _moveSpeed: 6
+  _lookSensitivity: 0.12
 --- !u!114 &4599389178806121297
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -384,7 +385,7 @@ MonoBehaviour:
   _camera: {fileID: 6386984548613373458}
   _pitchPivot: {fileID: 6667283376542126883}
   _input: {fileID: 2161694379724549707}
-  _motor: {fileID: 6400650492036641122}
+  _motor: {fileID: 0}
   _sensitivity: 0.12
   _pitchLimit: 85
 --- !u!1 &8995351341897327111

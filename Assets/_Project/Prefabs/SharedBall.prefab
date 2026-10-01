@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 4224255281310546376}
   - component: {fileID: 7883978493494260077}
   - component: {fileID: 8600915832399539003}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: SharedBall
   m_TagString: Untagged
   m_Icon: {fileID: 0}

@@ -76,11 +76,16 @@ Assets/
 - 物理由 FishNet `PhysicsSimulator` 手动模拟（预测要求），Physics 设置 `Simulation Mode = Script`；
 - 定时生成用 Tick 计数：`interval = 15 * TimeManager.TickRate`。
 
-### 5.3 玩家（预测对象）
-- **动态 `Rigidbody` + `CapsuleCollider`，直接设置速度移动（不做惯性）**，重力开（负责落地）、冻结旋转（不翻倒）；预测骨架 `Demos/Prediction/Rigidbody`；
-- **不要用 `CharacterController`**（实测结论，别再试）：CC 不参与 PhysX 接触 → 推球时球收不到力，推不动；且 CC 会沿球面爬升，玩家会站到球上不下来；
-- 也不用 kinematic 刚体：kinematic 与静态碰撞体之间不产生接触，玩家会穿墙；
-- 推球 = 玩家胶囊体的物理碰撞（动态 × 动态的真实动量交换），**禁止**按键施力/射线；
+### 5.3 玩家（预测对象）—— 完整依据与代码骨架见 `PHYSICS_DESIGN.md`
+
+- **Kinematic `Rigidbody` + `CapsuleCollider`**：不受力、不受惯性 → 球撞不动玩家（玩家语义 = "会走的墙"）。垂直方向与水平位移**全部自己算**，不吃重力；
+- **穿墙由 `Physics.CapsuleCast` 自 sweep 解决**（`PHYSICS_DESIGN.md §2.2`）。**不要**指望 PhysX 挡玩家：Unity `Contact Pairs Mode` 默认排除 kinematic-static 接触对，物理引擎在 Kinematic 玩家与静态墙之间**永远不产生接触**。同理**禁止**修改该项设置（墙的阻挡必须由我们的 sweep 独断，否则确定性交给物理求解器）；
+- `collisionDetectionMode` 必设 **`ContinuousSpeculative`**（Kinematic 唯一可用的 CCD，只作兜底，不作为唯一防线）；
+- 移动解算的查询掩码**只含 `World` 层** → 球不阻断玩家移动；同时 `Player↔Ball` 的物理接触**保持开启** → 球照样被推开/弹开。两者互不冲突，**不要**"为了不被球挡"去关碰撞矩阵；
+- **不用 `PredictionRigidbody`**（Dynamic 专用：靠写 velocity 再 `Simulate()` 驱动，Kinematic 会忽略 velocity）。玩家用位置驱动，`[Reconcile]` 内直接写 `position`；
+- **不要用 `CharacterController`**（FishNet 官方 `Demos/Prediction/CharacterController` 原文：CC 与 reconcile 结合会 *"practically guaranteed"* 穿模，官方为此打了 `enabled` 开关补丁）；且 CC 不参与 PhysX 接触推不动球、会沿球面爬升；
+- 推球 = kinematic-dynamic 接触对的 depenetration（默认存在，球被挤出）；M4 视手感可在**球侧**补显式冲量（`PHYSICS_DESIGN.md §2.6`），**禁止**在玩家侧做按键施力/射线；
+- 解算迭代次数必须**固定**（固定次数 = 确定性），禁止写成"直到无碰撞"的动态循环；
 - 输入结构体：`MoveInput { Vector2 Move; float Yaw; }`（Pitch 只作用本地相机，不同步）；
 - 移动在 `[Replicate]` 方法内做，`[Reconcile]` 内回滚重放；
 - 远程玩家朝向用低频 SyncVar 同步 yaw，仅用于视觉。
@@ -88,7 +93,8 @@ Assets/
 ### 5.4 共享球（核心难点）
 - Rigidbody + SphereCollider + `PredictionRigidbody` + `BallPrediction(NetworkBehaviour)`；
 - 球是**非玩家共享刚体**：无本地输入，仅 `[Reconcile]` 同步 Rigidbody 状态，客户端本地模拟 + 服务器修正（对应官方示例中的"rigidbodies without client input"模式）；
-- 推球 = 玩家胶囊体的物理碰撞，**禁止**实现成按键施力/射线（题目考察的就是碰撞同步）；
+- 推球 = 玩家胶囊体（Kinematic）与球的物理接触：PhysX 的 **kinematic-dynamic 接触对默认存在**，玩家移动挤入球时球被 depenetration 挤出，球侧**不需要**为推球写特殊逻辑；**禁止**实现成按键施力/射线（题目考察的就是碰撞同步）。若手感不足，M4 可在本类（球侧、仅服务器）补显式冲量，见 `PHYSICS_DESIGN.md §2.6`；
+- 层的划分见 `PHYSICS_DESIGN.md §2.7`：球在 `Ball` 层，`Ball↔World`（回弹）与 `Ball↔Player`（推球/弹球）**必须开启**；玩家移动的 sweep 掩码不含 `Ball` 层 → 球不阻断玩家移动（这是刻意的，不是漏配）；
 - **Prefab 层级纪律**：逻辑根（NetworkObject/Rigidbody/PredictionRigidbody/网络脚本）+ `Graphic` 子物体（MeshRenderer）。Renderer 只准挂 Graphic 子物体——同时服务预测回滚的图形平滑与后期换皮。**换美术资源只许改 Graphic 子物体的 Mesh/Material，禁止动逻辑根组件**；
 - **换皮与滚动视觉（球换成足球同理）**：只改 `Graphic` 子物体的 Mesh / Material / Texture；`Graphic` 的缩放必须从 `PhysicsTuning.BallRadius` 推导，**换 Mesh 不得改变物理尺寸**；图形平滑必须**同时覆盖位置与旋转**，否则足球纹路滚动时会看着"打滑"；
 - **碰撞事件接口（预留）**：与球的碰撞判定拆成服务器侧的事件源（见 §5.9），音效/特效等表现层只订阅事件，逻辑层里不写任何音频代码；
@@ -133,8 +139,8 @@ Assets/
   验收：双开 Editor，A Host B Join，互见对方移动。
 - [ ] **T3 房间与球（非预测）**：房间（墙+地+3 柱）、SharedBall 生成、物理材质弹回。
   验收：推动球撞柱真实弹回，另一端可见（允许拉扯，下一步修复）。
-- [ ] **T4 预测与和解（核心）**：玩家改 PredictionRigidbody 移动；球接 reconcile-only 预测；图形平滑。
-  验收：**双人对冲同 Tick 撞球 ×10 次，无瞬移、无严重错位**（T3 用例）。这是全项目最关键验收点。
+- [ ] **T4 预测与和解（核心）**：玩家改 **Kinematic + 自 sweep 解算**的预测移动（见 `PHYSICS_DESIGN.md §2`）；球接 reconcile-only 预测；图形平滑。
+  验收：**双人对冲同 Tick 撞球 ×10 次，无瞬移、无严重错位**（T3 用例），并跑通 `PHYSICS_DESIGN.md §6` 的 P1/P3/P4/P5。这是全项目最关键验收点。
 - [ ] **T5 中途加入**：验证滚动中的球对新客户端位置/速度正确。
 - [ ] **T6 主机退出**：客户端提示 + 返回菜单 + 可重连。
 - [ ] **T7 定时生成**：Host Tick 计数每 15s 随机生成，上限 8。
@@ -150,6 +156,8 @@ Assets/
 - ❌ 用 `Time.time`/协程做网络计时；
 - ❌ 客户端直接改共享状态、客户端 Spawn 网络对象；
 - ❌ 把渲染 Mesh 直接挂在被回滚的逻辑刚体上；
+- ❌ **把玩家位移直接交给 PhysX**（改 `Contact Pairs Mode`、把玩家改回 Dynamic 靠碰撞求解、指望 `MovePosition`/CCD 挡墙）——玩家位移必须经 `Physics.CapsuleCast` 自 sweep 解算（`PHYSICS_DESIGN.md §2.2`）；
+- ❌ 关掉 `Player↔Ball` 的碰撞矩阵（会同时失去推球与球的反弹）；或把 `Ball` 加进玩家移动的 sweep 掩码（会让球阻断玩家移动）；
 - ❌ **修改 PROGRESS.md 已勾选节点的核心类来实现新功能**——走新增类/组件/事件扩展（开闭原则，CODING_STANDARDS §8.1）；
 - ❌ 网络方法缺「执行侧 + 触发时机」注释、热路径方法缺 `[热路径]` 标注；提交死代码注释 / 无主 TODO；
 - ❌ 新增 static 单例（NetworkManager 除外）、跨 asmdef 反向引用、UI 直接写玩法状态；

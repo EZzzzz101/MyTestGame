@@ -70,5 +70,42 @@ namespace SphereRoom.Core
 
         /// <summary>定时生成间隔（Tick 数）：15 秒 @ 当前 TickRate。</summary>
         public const int SpawnIntervalTicks = 15 * TickRate;
+
+        // ---- 玩家移动解算（PHYSICS_DESIGN.md §2.8）----
+
+        /// <summary>解算位移时的贴墙滑行迭代次数（固定值 = 确定性，不要改成动态次数）。</summary>
+        public const int MoveSlideIterations = 3;
+
+        /// <summary>小于该长度的剩余位移直接丢弃（米）。</summary>
+        public const float MoveEpsilon = 0.001f;
+
+        /// <summary>贴墙留缝，避免下次 Cast 起点落在碰撞面上返回 distance = 0（米）。</summary>
+        public const float MoveSkinWidth = 0.01f;
+
+        /// <summary>胶囊两个球心距原点的高度（= 高度/2 − 半径 = 0.9 − 0.4）。</summary>
+        public const float CapsuleHalfSegment = 0.5f;
+
+        /// <summary>胶囊中心到脚底的距离（= 高度/2）。</summary>
+        public const float CapsuleHalfHeight = 0.9f;
+
+        /// <summary>地面探测起点高度（米）。</summary>
+        public const float GroundProbeStartY = 2f;
+
+        /// <summary>地面探测球半径相对玩家半径的比例。</summary>
+        public const float GroundProbeRadiusRatio = 0.9f;
+
+        /// <summary>地面探测最大距离（米）。</summary>
+        public const float GroundProbeDistance = 4f;
+
+        /// <summary>玩家位移解算查询的层掩码（仅静态世界层）。</summary>
+        public const int WorldLayerMask = 1 << PhysicsLayers.World;
+
+        // ---- 推球冲量（M4 视手感启用）----
+
+        /// <summary>玩家沿接触法线的速度低于该值时不产生推球冲量（米/秒）。</summary>
+        public const float MinPlayerPushSpeed = 1f;
+
+        /// <summary>玩家速度到球冲量的转换系数。</summary>
+        public const float PlayerPushFactor = 1.2f;
     }
 }

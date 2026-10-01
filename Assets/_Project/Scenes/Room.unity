@@ -162,12 +162,12 @@ GameObject:
   - component: {fileID: 229857567}
   - component: {fileID: 229857566}
   - component: {fileID: 229857565}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Pillar NE
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &229857564
 Transform:
@@ -274,12 +274,12 @@ GameObject:
   - component: {fileID: 291876179}
   - component: {fileID: 291876178}
   - component: {fileID: 291876177}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Ceiling
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &291876176
 Transform:
@@ -458,12 +458,12 @@ GameObject:
   - component: {fileID: 556131557}
   - component: {fileID: 556131556}
   - component: {fileID: 556131555}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Wall South
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &556131554
 Transform:
@@ -601,12 +601,12 @@ GameObject:
   - component: {fileID: 834168055}
   - component: {fileID: 834168054}
   - component: {fileID: 834168053}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Wall East
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &834168052
 Transform:
@@ -713,12 +713,12 @@ GameObject:
   - component: {fileID: 876411390}
   - component: {fileID: 876411389}
   - component: {fileID: 876411388}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Pillar SE
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &876411387
 Transform:
@@ -825,12 +825,12 @@ GameObject:
   - component: {fileID: 910756451}
   - component: {fileID: 910756450}
   - component: {fileID: 910756449}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Wall North
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &910756448
 Transform:
@@ -1049,12 +1049,12 @@ GameObject:
   - component: {fileID: 936700738}
   - component: {fileID: 936700737}
   - component: {fileID: 936700736}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Pillar NW
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &936700735
 Transform:
@@ -1227,12 +1227,12 @@ GameObject:
   - component: {fileID: 1645781607}
   - component: {fileID: 1645781606}
   - component: {fileID: 1645781605}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Wall West
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &1645781604
 Transform:
@@ -1339,12 +1339,12 @@ GameObject:
   - component: {fileID: 1669913712}
   - component: {fileID: 1669913711}
   - component: {fileID: 1669913710}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Floor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &1669913709
 Transform:
@@ -1548,12 +1548,12 @@ GameObject:
   - component: {fileID: 1991454436}
   - component: {fileID: 1991454435}
   - component: {fileID: 1991454434}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Pillar SW
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 4294967295
   m_IsActive: 1
 --- !u!4 &1991454433
 Transform:

@@ -54,6 +54,7 @@ M0 工程基线
 4. **Prefab 层级纪律**：逻辑根（NetworkObject/Rigidbody/PredictionRigidbody/网络脚本）+ `Graphic` 子物体（Renderer）。渲染 Mesh 永不挂逻辑根。
 5. **物理参数集中**：弹性/摩擦/平滑权重全部收在 `PhysicsTuning`，不在 Inspector 散落魔法数。
 6. **每次节点完工**：编译 0 error 0 warning → 勾选本清单 → 独立 commit（Conventional Commits，中文描述），严禁 squash。
+7. **物理选型**（`PHYSICS_DESIGN.md` 为唯一权威）：**玩家 = Kinematic + 自 sweep 解算**（不受球推动/不受惯性，穿墙由 `CapsuleCast` 解决，不依赖 PhysX）；**球 = Dynamic**（回弹、被推）；`Player↔Ball` 接触必须开启，玩家的 sweep 掩码只含 `World` 层。任何"改玩家刚体类型 / 关碰撞矩阵 / 改 Physics `Contact Pairs Mode`"的改动，必须**先更新 `PHYSICS_DESIGN.md`** 再动代码。
 
 ---
 
@@ -109,11 +110,12 @@ M0 工程基线
 **目标**：有可玩的房间和会弹回、会同步的共享球（允许被拉扯）。
 
 工作项：
-- `Room` 场景几何：Cube 拼地板 + 四面墙 + 3~4 根障碍柱；静态 Collider；顶棚按需（防球飞出）。
-- `PhysicsTuning` 常量类：Bounciness 0.55~0.7 / Friction 0.4 / 平滑参数。
+- `Room` 场景几何：Cube 拼地板 + 四面墙 + 3~4 根障碍柱；静态 Collider（**每块厚度 ≥ 0.3 m**，层 = `World`，勾 Static）；顶棚按需（防球飞出）。
+- `PhysicsTuning` 常量类：Bounciness 0.55~0.7 / Friction 0.4 / 平滑参数；层索引常量（`World`/`Player`/`Ball`）（解算用常量在 M3 追加，见 `PHYSICS_DESIGN.md §2.8`）。
 - `SharedBall` 预制体（逻辑根 + Graphic 子物体）+ 材质；Host 端开局生成 1 个。
 - 球状态同步先走「非预测近似」（NetworkTransform 或状态 SyncVar），明确标注为临时方案。
 - 玩家胶囊体与球的物理碰撞天然推球（**不做射线/按键施力**）。
+  - ⚠️ **机制变更提示**：本节点验收时玩家是 **Dynamic**，推球 = 动态 × 动态的真实动量交换；M3 玩家改为 **Kinematic** 后，推球机制变为 `kinematic-dynamic` 接触对的 **depenetration（挤出）**，手感会变化 → **M3 必须重新验收推球用例（见 M3 的 P3/P4）**，不要把 M2 的推球结论直接沿用。
 - 球的层级纪律（为将来换足球预留，AGENTS §5.4/§5.9）：逻辑根 + `Graphic` 子物体（Sphere 原型 + `Mat_Ball`），Graphic 缩放由 `PhysicsTuning.BallRadius` 推导；换皮只改 Mesh/Material/Texture。
 - 新增 `BallImpactDispatcher`（服务器碰撞事件源）：`OnCollisionEnter` 判定 → `ObserversRpc` 广播 → 触发本地 `event Action<BallImpactData> BallImpacted`。M2 只保证「服务器判定 → 广播 → 本地事件」链路可用，音效订阅者（`BallAudioView`）在 M8 接。
 
@@ -127,16 +129,28 @@ M0 工程基线
 **目标**：本地移动零输入延迟，服务器权威且能纠正作弊/偏差。
 
 工作项：
-- `Player` 逻辑根挂 `PredictionRigidbody`；物理改由 FishNet `PhysicsSimulator` 手动步进。
+- **物理选型落地（本节点第一件事，依据 `PHYSICS_DESIGN.md`）**：
+  - `Player.prefab` 刚体改 **Kinematic**（`m_IsKinematic: 1` / `m_UseGravity: 0` / `m_CollisionDetection: ContinuousSpeculative` / `m_Interpolate: 0`），层设 `Player`；
+  - `SharedBall.prefab` 层设 `Ball`；房间静态几何层设 `World` 并勾 Static，碰撞体厚度 ≥ 0.3 m；
+  - 新增层 `World`/`Player`/`Ball` 与碰撞矩阵（**开 `Player↔Ball`**、关 `Player↔Player`；**不动** `Contact Pairs Mode`）；
+  - `PhysicsTuning` 追加 `PHYSICS_DESIGN.md §2.8` 的解算常量。
+- 物理改由 FishNet `PhysicsSimulator` 手动步进。
 - 输入结构体 `MoveInput { Vector2 Move; float Yaw; }`（Pitch 只作用本地相机，不同步）。
 - 移动逻辑写进 `[Replicate]` 方法（每 Tick 采集输入上行），`[Reconcile]` 内回滚重放。
+- 移动位移用 `Physics.CapsuleCast` **自 sweep 解算**（sweep + 贴墙滑行、迭代次数固定 3；查询掩码只含 `World` 层），垂直方向用向下 `SphereCast` 贴地。**玩家不挂 `PredictionRigidbody`**（Dynamic 专用），`[Reconcile]` 直接写 `position`。
 - 实施方式（§8.1）：**新增** `PlayerPredictedMotor` 组件并在预制体上替换 M1 的 `PlayerMotor`，不回改已验收的核心类。
-- 骨架：玩家与球都用包内 `Demos/Prediction/Rigidbody`（玩家不用 CharacterController：不参与 PhysX 接触推不动球、且会沿球面爬升，见 AGENTS §5.3）。
+- 骨架：球用包内 `Demos/Prediction/Rigidbody`；玩家侧**不用** `CharacterController`（官方原文：与 reconcile 结合会 "practically guaranteed" 穿模），按 `PHYSICS_DESIGN.md §2.4` 的骨架实现。
 - 服务器侧输入验证：速度上限 clamp、位置越界回正。
 - 远程玩家朝向用低频 SyncVar（yaw）仅作视觉。
 
 **完成定义**：双开下本地移动无延迟感；远程玩家位置平滑无明显抖动；服务器能拒绝异常速度。
-**风险**：以官方 `Demos/Prediction/Rigidbody` 为骨架改造，逐行核对 API 签名。
+**完成定义（物理，逐条见 `PHYSICS_DESIGN.md §6`）**：
+- P1 贴墙八方向全速猛冲 3s 不穿墙；
+- P3 高速球撞静止玩家 → **玩家位置零变化**、球被弹开；
+- P4 玩家全速撞球 → 球被推走，玩家不被减速/推回（M2 的推球结论必须在此重新验收）；
+- P5 玩家把球挤到墙角 → 球不穿墙；
+- P6 出生点无重叠（防 sweep 起点在碰撞体内导致永久卡死）。
+**风险**：以官方 `Demos/Prediction/Rigidbody` 为骨架改造，逐行核对 API 签名；若 `MovePosition` 在 Kinematic 下不触发对球的 depenetration（P4 失败），按 `PHYSICS_DESIGN.md §2.6/§7` 改由球侧显式冲量承担推球。
 
 ---
 

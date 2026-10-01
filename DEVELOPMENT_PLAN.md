@@ -75,14 +75,14 @@ Scenes/
 
 | Prefab | 组件 | 网络语义 |
 |--------|------|----------|
-| `Player` | `NetworkObject`、动态 `Rigidbody`(重力开、冻结旋转、直接设速度) + `CapsuleCollider`、`PlayerInputReader`、`PlayerMotor`、`PlayerCamera`(仅 Owner)、`PlayerTappedUI` | **预测对象**：客户端预测，服务器和解（骨架 `Demos/Prediction/Rigidbody`） |
+| `Player` | `NetworkObject`、**Kinematic `Rigidbody`**（冻结旋转、`ContinuousSpeculative`）+ `CapsuleCollider`、`PlayerInputReader`、`PlayerPredictedMotor`、`PlayerCamera`(仅 Owner)、`PlayerTappedUI` | **预测对象**：客户端预测，服务器和解。位移由自 sweep 解算（`PHYSICS_DESIGN.md`） |
 | `SharedBall` | `NetworkObject`、`Rigidbody`+`SphereCollider`、`PredictionRigidbody`、`BallPrediction`、`BallImpactDispatcher`（碰撞事件源） | **共享刚体**：服务器权威模拟，客户端预测 + reconcile 修正 |
 | `GameManager` | `NetworkObject`、`BallSpawner`、`TappedDispatcher` | Host 单例，服务器逻辑：定时生成、Tapped 判定 |
 
 **Prefab 层级纪律（逻辑根 + Graphic 子物体）**：所有网络 Prefab 结构固定为——
 
 ```
-Player (逻辑根: NetworkObject / Rigidbody / PredictionRigidbody / 各网络脚本)
+Player (逻辑根: NetworkObject / Kinematic Rigidbody + CapsuleCollider / PredictionRigidbody(仅球) / 各网络脚本)
 └── Graphic (图形子物体: Capsule 原型 MeshRenderer / 换皮只动这里)
 SharedBall (逻辑根: 同上)
 └── Graphic (Sphere 原型 MeshRenderer)
@@ -110,18 +110,18 @@ SharedBall (逻辑根: 同上)
 
 1. 所有玩家输入带 Tick 编号上行到 Host；
 2. Host 在 Tick N 收齐（或超时补齐）所有在线玩家输入后，按确定顺序重演物理（同 Tick 同输入集合 → 服务器结果唯一）；
-3. Host 回传 Tick N 和解状态（每个玩家 + 每个球的 Rigidbody 位置/速度/角速度）；
+3. Host 回传 Tick N 和解状态：**球**（Rigidbody 位置/速度/角速度）与**玩家**（位置 + 朝向；玩家是 Kinematic，无速度需要恢复 → 载荷更小）；
 4. 客户端偏差超阈值 → 回滚到服务器状态 → 顺序重放本地输入到当前 Tick；
-5. 逻辑体与图形体分离：图形由 `PredictionRigidbody` 平滑器驱动，回滚不造成画面瞬移；
+5. 逻辑体与图形体分离：球由 `PredictionRigidbody` 平滑器驱动，玩家由位置平滑器驱动，回滚不造成画面瞬移；
 6. 效果：双人同 Tick 撞球，双端轨迹一致（服务器唯一真相），预测错误在一两个 Tick 内无感修正。
 
-**实现参照**：FishNet 官方 `Demos/Prediction/Rigidbody`（场景 `Rigidbody Prediction Demo.unity`）——玩家移动与球体 reconcile-only 都以该示例为骨架改造，不自己发明。玩家不用 `CharacterController`：它不参与 PhysX 接触（推不动球）且会沿球面爬升（实测）。
+**实现参照**：FishNet 官方 `Demos/Prediction/Rigidbody`（场景 `Rigidbody Prediction Demo.unity`）——球体 reconcile-only 以该示例为骨架改造，不自己发明。玩家侧不用 `CharacterController`（官方原文：与 reconcile 结合会 *"practically guaranteed"* 穿模），改用 **Kinematic 刚体 + 自 sweep 解算**，完整依据、代码骨架、层划分与验收用例见 **`PHYSICS_DESIGN.md`**。
 
 ### 4.5 输入与移动模型
 
 - 输入结构（每 Tick 采集）：`MoveInput { Vector2 Move; float Yaw; }`（Pitch 只作用本地相机，不同步）；
-- 玩家 Rigidbody + `PredictionRigidbody`，直接设置 velocity，不做惯性；
-- 推球 = 玩家胶囊体物理碰撞的自然结果，**不做射线/按键推力**。
+- 玩家 **Kinematic Rigidbody，位移由自己 `CapsuleCast` 解算后写入**（sweep + 贴墙滑行，查询掩码只含 `World` 层）：既不受球推动/惯性影响，也不穿墙。**不使用 `PredictionRigidbody`**（那是 Dynamic 专用）；
+- 推球 = 玩家胶囊（Kinematic）与球的 `kinematic-dynamic` 物理接触（depenetration 把球挤出），**不做射线/按键推力**；手感不足时在球侧补冲量，见 `PHYSICS_DESIGN.md §2.6`。详细定案与逐条配置见 **`PHYSICS_DESIGN.md`**。
 
 ---
 
