@@ -114,8 +114,11 @@ M0 工程基线
 - `SharedBall` 预制体（逻辑根 + Graphic 子物体）+ 材质；Host 端开局生成 1 个。
 - 球状态同步先走「非预测近似」（NetworkTransform 或状态 SyncVar），明确标注为临时方案。
 - 玩家胶囊体与球的物理碰撞天然推球（**不做射线/按键施力**）。
+- 球的层级纪律（为将来换足球预留，AGENTS §5.4/§5.9）：逻辑根 + `Graphic` 子物体（Sphere 原型 + `Mat_Ball`），Graphic 缩放由 `PhysicsTuning.BallRadius` 推导；换皮只改 Mesh/Material/Texture。
+- 新增 `BallImpactDispatcher`（服务器碰撞事件源）：`OnCollisionEnter` 判定 → `ObserversRpc` 广播 → 触发本地 `event Action<BallImpactData> BallImpacted`。M2 只保证「服务器判定 → 广播 → 本地事件」链路可用，音效订阅者（`BallAudioView`）在 M8 接。
 
 **完成定义**：A 推球撞柱，两端都看到真实弹回、球不穿墙；允许拉扯与延迟（M4 修）。
+**完成定义（补充）**：碰球事件已能被订阅（M8 之前可用一次性临时订阅验证链路，验证后删除）。
 
 ---
 
@@ -184,6 +187,7 @@ M0 工程基线
 **目标**：被球撞到的玩家自己看到 "Tapped"，别人看不到。
 
 工作项：Host 端球×玩家 `OnCollisionEnter` 判定 → `TargetRpc` 到该连接 → 该客户端 UI 显示 2s 后淡出。
+工作项（补充）：音频表现层 `BallAudioView` 订阅 M2 预留的 `BallImpacted` 播放踢中音效；滚动声由同步速度本地驱动（不订阅网络事件，M4 起速度才准确）。音源资产到 M8 再定。
 **完成定义（T7）**：A 撞球时只有 A 显示 Tapped，B/C 无提示。
 
 ---

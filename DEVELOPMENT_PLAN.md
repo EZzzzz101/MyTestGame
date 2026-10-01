@@ -76,7 +76,7 @@ Scenes/
 | Prefab | 组件 | 网络语义 |
 |--------|------|----------|
 | `Player` | `NetworkObject`、`Rigidbody`+`CapsuleCollider`、`PredictionRigidbody`、`PlayerInputReader`、`PlayerMotor`、`PlayerCamera`(仅 Owner)、`PlayerTappedUI` | **预测对象**：客户端预测，服务器和解 |
-| `SharedBall` | `NetworkObject`、`Rigidbody`+`SphereCollider`、`PredictionRigidbody`、`BallPrediction` | **共享刚体**：服务器权威模拟，客户端预测 + reconcile 修正 |
+| `SharedBall` | `NetworkObject`、`Rigidbody`+`SphereCollider`、`PredictionRigidbody`、`BallPrediction`、`BallImpactDispatcher`（碰撞事件源） | **共享刚体**：服务器权威模拟，客户端预测 + reconcile 修正 |
 | `GameManager` | `NetworkObject`、`BallSpawner`、`TappedDispatcher` | Host 单例，服务器逻辑：定时生成、Tapped 判定 |
 
 **Prefab 层级纪律（逻辑根 + Graphic 子物体）**：所有网络 Prefab 结构固定为——
@@ -90,7 +90,8 @@ SharedBall (逻辑根: 同上)
 
 - 图形子物体挂 Renderer，逻辑根只挂网络/物理组件——**这层分离同时服务于预测回滚（图形平滑）与后期换资源**；
 - **原型素材即最终形态默认**：玩家 = 内置 Capsule 原型 + 服务器分配玩家色（`playerIndex` SyncVar → 4 色板），球 = 内置 Sphere 原型 + 彩色材质，房间 = Cube 拼地板/墙/柱。零外部资源依赖，评审方开箱即跑；
-- **后期加美术资源（可选，不评分，永不优先）**：只替换 Graphic 子物体的 Mesh/Material，逻辑根与全部代码零改动。因层级纪律已保证，此项不设里程碑、随时可做。
+- **后期加美术资源（可选，不评分，永不优先）**：只替换 Graphic 子物体的 Mesh/Material/Texture（球换足球同理），逻辑根与全部代码零改动。因层级纪律已保证，此项不设里程碑、随时可做。两条硬要求：Graphic 缩放从 `PhysicsTuning.BallRadius` 推导（换 Mesh 不改物理尺寸）；图形平滑同时覆盖位置与旋转（否则有纹路的足球滚动会看着"打滑"）；
+- **表现层扩展点（音频等）**：离散的碰撞/踢中事件由服务器判定后 `ObserversRpc` 广播，表现层订阅；连续的滚动声由同步速度在本地驱动、不占网络事件。契约与落地节点见 `AGENTS.md` §5.9。
 
 ### 4.3 状态同步策略总表
 
@@ -101,6 +102,7 @@ SharedBall (逻辑根: 同上)
 | 远程玩家朝向 | 低频 SyncVar（yaw） | 视觉用；第一人称相机不同步 |
 | 球的生成/销毁 | 服务器 Instantiate + Spawn / Despawn | 可靠通道，事件语义 |
 | Tapped 提示 | TargetRpc（服务器→被碰玩家） | 服务器权威碰撞判定 |
+| 球体碰撞/踢中事件 | ObserversRpc（服务器判定后广播） | 表现层（音效/特效）订阅；滚动声不占网络，由同步速度本地驱动 |
 | 计时器（15s） | 不同步 | 纯服务器内部 Tick 计数 |
 | 房间人数 | 服务器 SyncVar | 菜单/HUD 显示用 |
 
@@ -133,6 +135,8 @@ SharedBall (逻辑根: 同上)
 ### P0-2 共享物理球
 - 见 4.4；物理材质 `Bounciness 0.55~0.7 / Friction 0.4`；
 - 墙体/障碍静态 Collider，3~4 根柱子保证弹回可验证。
+- 换皮预留：球换足球只改 `Graphic` 子物体的 Mesh/Material/Texture；缩放由 `PhysicsTuning.BallRadius` 推导，平滑需覆盖旋转；
+- 音频预留：踢中/撞击走 `BallImpactDispatcher`（服务器判定 + `ObserversRpc`）事件，音效在 M8 作为订阅者接入；滚动声由同步速度本地驱动。
 
 ### P0-3 第一人称
 - `PlayerCamera` 仅 Owner 启用；Yaw 作用玩家本体、Pitch 作用相机 pivot；

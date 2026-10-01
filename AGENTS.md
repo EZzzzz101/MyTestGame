@@ -86,6 +86,8 @@ Assets/
 - 球是**非玩家共享刚体**：无本地输入，仅 `[Reconcile]` 同步 Rigidbody 状态，客户端本地模拟 + 服务器修正（对应官方示例中的"rigidbodies without client input"模式）；
 - 推球 = 玩家胶囊体的物理碰撞，**禁止**实现成按键施力/射线（题目考察的就是碰撞同步）；
 - **Prefab 层级纪律**：逻辑根（NetworkObject/Rigidbody/PredictionRigidbody/网络脚本）+ `Graphic` 子物体（MeshRenderer）。Renderer 只准挂 Graphic 子物体——同时服务预测回滚的图形平滑与后期换皮。**换美术资源只许改 Graphic 子物体的 Mesh/Material，禁止动逻辑根组件**；
+- **换皮与滚动视觉（球换成足球同理）**：只改 `Graphic` 子物体的 Mesh / Material / Texture；`Graphic` 的缩放必须从 `PhysicsTuning.BallRadius` 推导，**换 Mesh 不得改变物理尺寸**；图形平滑必须**同时覆盖位置与旋转**，否则足球纹路滚动时会看着"打滑"；
+- **碰撞事件接口（预留）**：与球的碰撞判定拆成服务器侧的事件源（见 §5.9），音效/特效等表现层只订阅事件，逻辑层里不写任何音频代码；
 - 原型素材：玩家 = Capsule 原型 + 服务器分配玩家色（`playerIndex` SyncVar → 4 色板），球 = Sphere 原型，房间 = Cube。不引入任何外部美术资源。
 
 ### 5.5 生成与销毁
@@ -104,6 +106,18 @@ Assets/
 - `TransportMultiplexer` 同时挂 Tugboat + SteamworksSockets（一个 Build 同时支持 LAN 与 Steam）；
 - Lobby：Host 创建 → Steam Overlay 邀请 → 对方接受后以 Lobby 成员 SteamID 建立 P2P 连接；
 - `steam_appid.txt = 480`。
+
+### 5.9 表现层扩展点（换皮与音频）
+
+- **换皮**：美术资源只改 `Graphic` 子物体的 Mesh / Material / Texture（球换足球也一样），逻辑根组件与代码零改动（§5.4 已定纪律）；
+- **表现层只订阅、不反向写玩法状态**（§8.4）：音频、特效、UI 都是订阅者；
+- **离散事件（踢中 / 撞击）走服务器权威**：服务器 `OnCollisionEnter` 判定 → `ObserversRpc` 广播（含 Host 自身）→ 在 RPC 体内触发本地事件 → 表现层订阅播放。不在各客户端自行判定，避免结果不一致与重复播放；
+- **连续状态（滚动声）不占网络带宽**：由同步到的球速度在本地驱动音量/音调。注意 M2 是近似同步、只同步位姿，客户端只能用位置差分估算速度（不准）；M4 起 reconcile 同步真实速度/角速度后才准确；
+- **预留契约**（M2 落地事件源，M8 落地订阅者，本阶段不实现音频本身）：
+  - 事件：`event Action<BallImpactData> BallImpacted`；
+  - 事件源：`BallImpactDispatcher`（挂球逻辑根，服务器判定 + 广播）；
+  - 载荷 `BallImpactData`：球实例、接触点、接触法线、相对速度/冲量强度、发生 Tick；
+  - 订阅者示例（M8）：`BallAudioView` 播放踢中音效 + 按速度驱动滚动音量。
 
 ## 6. 任务分解（按顺序执行，每项含验收标准）
 
