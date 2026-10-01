@@ -54,7 +54,7 @@ namespace SphereRoom.Player
 
             Vector2 look = _input.ReadLook();
 
-            // Yaw：交给 PlayerMotor 在 FixedUpdate 里用 MoveRotation 应用（物理域，避免抖动与覆盖）。
+            // Yaw：交给 PlayerMotor 在 Update 里写 Transform.rotation（CC 不管理旋转；位移也不经过刚体，二者不再互相覆盖）。
             if (_motor != null)
                 _motor.ApplyYawDelta(look.x * _sensitivity);
 
