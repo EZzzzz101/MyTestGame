@@ -131,7 +131,7 @@ M0 工程基线
 - 输入结构体 `MoveInput { Vector2 Move; float Yaw; }`（Pitch 只作用本地相机，不同步）。
 - 移动逻辑写进 `[Replicate]` 方法（每 Tick 采集输入上行），`[Reconcile]` 内回滚重放。
 - 实施方式（§8.1）：**新增** `PlayerPredictedMotor` 组件并在预制体上替换 M1 的 `PlayerMotor`，不回改已验收的核心类。
-- 骨架：玩家侧用包内 `Demos/Prediction/CharacterController`（CC 的位置 + 垂直速度进 reconcile），球体仍用 `Demos/Prediction/Rigidbody`。
+- 骨架：玩家与球都用包内 `Demos/Prediction/Rigidbody`（玩家不用 CharacterController：不参与 PhysX 接触推不动球、且会沿球面爬升，见 AGENTS §5.3）。
 - 服务器侧输入验证：速度上限 clamp、位置越界回正。
 - 远程玩家朝向用低频 SyncVar（yaw）仅作视觉。
 

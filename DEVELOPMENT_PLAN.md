@@ -75,7 +75,7 @@ Scenes/
 
 | Prefab | 组件 | 网络语义 |
 |--------|------|----------|
-| `Player` | `NetworkObject`、`CharacterController`(移动) + `CapsuleCollider` + 运动学 `Rigidbody`(仅与球体产生接触)、`PlayerInputReader`、`PlayerMotor`、`PlayerCamera`(仅 Owner)、`PlayerTappedUI` | **预测对象**：客户端预测，服务器和解（骨架 `Demos/Prediction/CharacterController`） |
+| `Player` | `NetworkObject`、动态 `Rigidbody`(重力开、冻结旋转、直接设速度) + `CapsuleCollider`、`PlayerInputReader`、`PlayerMotor`、`PlayerCamera`(仅 Owner)、`PlayerTappedUI` | **预测对象**：客户端预测，服务器和解（骨架 `Demos/Prediction/Rigidbody`） |
 | `SharedBall` | `NetworkObject`、`Rigidbody`+`SphereCollider`、`PredictionRigidbody`、`BallPrediction`、`BallImpactDispatcher`（碰撞事件源） | **共享刚体**：服务器权威模拟，客户端预测 + reconcile 修正 |
 | `GameManager` | `NetworkObject`、`BallSpawner`、`TappedDispatcher` | Host 单例，服务器逻辑：定时生成、Tapped 判定 |
 
@@ -115,7 +115,7 @@ SharedBall (逻辑根: 同上)
 5. 逻辑体与图形体分离：图形由 `PredictionRigidbody` 平滑器驱动，回滚不造成画面瞬移；
 6. 效果：双人同 Tick 撞球，双端轨迹一致（服务器唯一真相），预测错误在一两个 Tick 内无感修正。
 
-**实现参照**：FishNet 官方 `Demos/Prediction/Rigidbody`（场景 `Rigidbody Prediction Demo.unity`）——球体 reconcile-only 以该示例为骨架改造；玩家侧骨架改用 `Demos/Prediction/CharacterController`（见 4.2）。不自己发明。
+**实现参照**：FishNet 官方 `Demos/Prediction/Rigidbody`（场景 `Rigidbody Prediction Demo.unity`）——玩家移动与球体 reconcile-only 都以该示例为骨架改造，不自己发明。玩家不用 `CharacterController`：它不参与 PhysX 接触（推不动球）且会沿球面爬升（实测）。
 
 ### 4.5 输入与移动模型
 
