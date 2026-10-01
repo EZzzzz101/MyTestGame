@@ -73,7 +73,8 @@ namespace SphereRoom.Player
         // [双端 | Tick 驱动] 收集输入并执行 Replicate（回滚重放时同一方法体会被再次调用）。
         protected override void TimeManager_OnTick()
         {
-            PerformReplicate(BuildMoveData());
+            // 直接调用本项目自己的 [Replicate] 方法（官方示例同法：属性标注决定 FishNet 的回滚/重放处理）。
+            Move(BuildMoveData());
         }
 
         // [双端 | Tick 驱动] 物理步之后构建和解：服务器下发给 Owner，客户端自建一份作为丢包兜底。
@@ -94,7 +95,8 @@ namespace SphereRoom.Player
         /// <summary>[双端] 构建和解数据：客户端也建一份，丢包时可临时兜底（官方示例同法）。</summary>
         public override void CreateReconcile()
         {
-            PerformReconcile(new PlayerReconcileState(transform.position, _yaw));
+            // 同样直接调用本项目自己的 [Reconcile] 方法（官方示例同法）。
+            Reconcile(new PlayerReconcileState(transform.position, _yaw));
         }
 
         // [双端 | Tick 驱动] 位移解算：输入 → 期望位移 → CapsuleCast 解算 → MovePosition。
