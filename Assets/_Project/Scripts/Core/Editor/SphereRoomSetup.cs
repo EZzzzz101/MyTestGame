@@ -157,9 +157,17 @@ namespace SphereRoom.Core.Editor
             graphic.transform.localPosition = new Vector3(0f, PhysicsTuning.PlayerHeight * 0.5f, 0f);
 
             // ---- 相机支点 + 相机（仅 Owner 启用，见 PlayerCamera）----
+            // ⚠️ 本方法构建的是 M1 基线预制体；Player 预制体已手工演进到 M3（PlayerPredictedMotor、
+            //    CameraPivot 移入 Graphic 平滑层、NetworkTransform 移除）。重跑会用 M1 结构覆盖现有预制体，
+            //    除非先把本方法同步到最新架构（2026-10-01 备注）。
             GameObject pivot = new GameObject("CameraPivot");
-            pivot.transform.SetParent(root.transform, false);
-            pivot.transform.localPosition = new Vector3(0f, PhysicsTuning.PlayerEyeHeight, 0f);
+            pivot.transform.SetParent(graphic.transform, false);
+            // CameraPivot 必须挂 Graphic（NetworkObject.GraphicalObject 平滑层）之下，否则相机跟随逻辑根以 Tick 步进；
+            // localPosition 需除以 Graphic 的 Y 缩放（眼高相对胶囊中心，再除胶囊半高缩放）。
+            pivot.transform.localPosition = new Vector3(
+                0f,
+                (PhysicsTuning.PlayerEyeHeight - PhysicsTuning.PlayerHeight * 0.5f) / (PhysicsTuning.PlayerHeight * 0.5f),
+                0f);
 
             GameObject cameraObject = new GameObject("PlayerCamera");
             cameraObject.transform.SetParent(pivot.transform, false);
@@ -173,9 +181,8 @@ namespace SphereRoom.Core.Editor
             SetObjectReference(motor, "_input", inputReader);
             SetObjectReference(identity, "_graphic", graphicRenderer);
             SetObjectReference(playerCamera, "_camera", camera);
-            SetObjectReference(playerCamera, "_pitchPivot", pivot.transform);
+            SetObjectReference(playerCamera, "_viewPivot", pivot.transform);
             SetObjectReference(playerCamera, "_input", inputReader);
-            SetObjectReference(playerCamera, "_motor", motor);
 
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
             Object.DestroyImmediate(root);
@@ -455,13 +462,14 @@ namespace SphereRoom.Core.Editor
             Button joinButton = CreateButton(panel.transform, "Join Button", "加入房间 (127.0.0.1)", font, new Vector2(0f, -40f));
             Text statusText = CreateText(panel.transform, "Status Text", "未联机", font, 20, new Vector2(0f, -105f), new Vector2(420f, 40f));
 
-            // 断开按钮挂在 Canvas 下（不在面板内），联机时面板隐藏它仍然可见。
-            Button leaveButton = CreateButton(canvasObject.transform, "Leave Button", "断开连接", font, Vector2.zero);
+            // 退出按钮挂在 Canvas 下（不在面板内），联机时面板隐藏它仍然可见。
+            // 布局（2026-10-01 定案）：左上角；右上角留给 NetworkDebugHud 的调试面板。
+            Button leaveButton = CreateButton(canvasObject.transform, "Leave Button", "退出游戏", font, Vector2.zero);
             RectTransform leaveRect = leaveButton.GetComponent<RectTransform>();
-            leaveRect.anchorMin = new Vector2(1f, 1f);
-            leaveRect.anchorMax = new Vector2(1f, 1f);
-            leaveRect.pivot = new Vector2(1f, 1f);
-            leaveRect.anchoredPosition = new Vector2(-24f, -24f);
+            leaveRect.anchorMin = new Vector2(0f, 1f);
+            leaveRect.anchorMax = new Vector2(0f, 1f);
+            leaveRect.pivot = new Vector2(0f, 1f);
+            leaveRect.anchoredPosition = new Vector2(24f, -24f);
             leaveRect.sizeDelta = new Vector2(180f, 48f);
             leaveButton.gameObject.SetActive(false);
 

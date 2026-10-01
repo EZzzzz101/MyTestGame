@@ -57,6 +57,7 @@ namespace SphereRoom.Network
 
             _networkManager.ServerManager.OnServerConnectionState += OnServerConnectionState;
             _networkManager.ClientManager.OnClientConnectionState += OnClientConnectionState;
+            _networkManager.SceneManager.OnLoadEnd += OnSceneLoadEnd;
 
             ReportStatus(NetworkMode.Offline, "未联机");
         }
@@ -68,6 +69,7 @@ namespace SphereRoom.Network
 
             _networkManager.ServerManager.OnServerConnectionState -= OnServerConnectionState;
             _networkManager.ClientManager.OnClientConnectionState -= OnClientConnectionState;
+            _networkManager.SceneManager.OnLoadEnd -= OnSceneLoadEnd;
         }
 
         /// <summary>创建房间：同进程启动 Server + Client（listen server），随后加载 Room。</summary>
@@ -81,7 +83,9 @@ namespace SphereRoom.Network
 
             // listen server：本机同时是 Server 与 Client，端口由 Inspector 配置。
             _networkManager.ServerManager.StartConnection(_port);
-            _networkManager.ClientManager.StartConnection(_address, _port);
+            // 注意：本地客户端要等 Room 加载完成后再连（见 OnSceneLoadEnd）——
+            // 否则 OnClientLoadedStartScenes 会在 Room 变成活动场景之前触发，玩家会被生成进 Boot 场景，
+            // 而后续加入的客户端都在 Room，导致两端玩家挂在不同的场景下。
         }
 
         /// <summary>加入房间：用 Inspector 里配置的地址直连。</summary>
@@ -129,6 +133,17 @@ namespace SphereRoom.Network
 
             ReportStatus(_mode, "主机已启动，等待加入");
             LoadRoomScene();
+        }
+
+        // [主机 | 事件驱动（场景加载完成）] Room 加载完成后才启动本地客户端，保证玩家生成在 Room。
+        private void OnSceneLoadEnd(SceneLoadEndEventArgs args)
+        {
+            if (_mode != NetworkMode.Host)
+                return;
+            if (_networkManager.ClientManager.Started)
+                return;
+
+            _networkManager.ClientManager.StartConnection(_address, _port);
         }
 
         // [客户端 | 事件驱动（客户端连接状态变化）] 维护本地联机状态与 UI 文案。

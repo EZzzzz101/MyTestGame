@@ -152,20 +152,51 @@ M0 工程基线
 - P6 出生点无重叠（防 sweep 起点在碰撞体内导致永久卡死）。
 **风险**：以官方 `Demos/Prediction/Rigidbody` 为骨架改造，逐行核对 API 签名；若 `MovePosition` 在 Kinematic 下不触发对球的 depenetration（P4 失败），按 `PHYSICS_DESIGN.md §2.6/§7` 改由球侧显式冲量承担推球。
 
+**已诊断问题（2026-10-01，两轮运行期排查；修复已由 WorkBuddy 直接落盘，待 Unity 内验证）**：
+
+第一轮（视角 50Hz 顿挫）——已落盘修复：
+- 根因 1：`CameraPivot` 挂在**逻辑根**下，没骑在 `PredictionSmoother` 平滑层上 → 画面以 Tick 步进；
+- 根因 2：Boot 场景 TimeManager `_physicsMode = Unity(0)`，物理步进与 Tick 相位不锁定。
+- 修复：CameraPivot 移入 `Graphic`（localPosition (0, 0.7777778, 0)）；`_ownerSmoothedProperties` 255→1（仅 Position）；Rigidbody `Interpolate`→None；`_physicsMode`→1（TimeManager）。
+
+第二轮（**转动视角时无法移动** + Scene 视图看不到自己胶囊）——已落盘修复：
+- 现象：鼠标转动视角期间 WASD 完全不动，停止转视角后恢复移动；且本地胶囊在 Scene 视图不可见。
+- 根因（转动锁死）：`PlayerPredictedMotor.Update()` 每帧直接写逻辑根的 `transform.rotation`。逻辑根是 Kinematic Rigidbody 物体，位移靠 Tick 内 `Rigidbody.MovePosition`（待下一次模拟步生效）；**渲染层直接写刚体物体的 Transform 会覆盖/取消待生效的 MovePosition**（Unity 物理团队官方口径："You should never modify a Transform that has a physics component on it, period. If you want to rotate, use MoveRotation."）。不转视角时写入的四元数值不变、被脏检查跳过，所以只有转动时触发——症状完全吻合。项目 `Physics.autoSyncTransforms = 0` 放大了该时序冲突。
+- 根因（Scene 不可见）：上一轮用 `renderer.enabled = false` 隐藏本地胶囊，Scene 视图一并被隐藏——设计错误，隐藏应只作用于 Game 视图。
+- 修复（架构定案：**视角归渲染层，逻辑根只在 Tick 内经 Rigidbody API 写入**）：
+  1. ✅ `PlayerCamera.cs` 重写：Yaw+Pitch 全部作用在 `_viewPivot`（原 `_pitchPivot`，即 CameraPivot，Graphic 平滑层之下），每帧应用 `Quaternion.Euler(pitch, yaw, 0)`（ZXY 顺序 = 先世界 Yaw 后本地 Pitch，标准 FPS 相机）；暴露 `ViewYaw` 供 Tick 采样；`OnStartClient` 内 Owner 剔除 `LocalPlayerBody` 层；死引用 `_motor`（PlayerMotor）一并删除；
+  2. ✅ `PlayerPredictedMotor.cs`：**删除 Update() 与 `_pendingYaw`**（渲染层写逻辑根的反模式源头）；`BuildMoveData` 的 Yaw 改采样 `_camera.ViewYaw`（Tick 边界采样，回放用历史值，确定性不变）；`_lookSensitivity` 字段删除（灵敏度归 PlayerCamera）；
+  3. ✅ 胶囊隐藏改**层剔除**方案：新增层 `LocalPlayerBody(9)`（TagManager + `PhysicsLayers.LocalPlayerBody` 常量）；Owner 在 `OnOwnershipClient` 把自己的 Graphic 挪到该层，本地相机 CullingMask 剔除之——**Game 视图不可见、Scene 视图照常可见**、其他客户端上同一玩家仍照常渲染（layer 非同步属性，只影响本端实例）；
+  4. ✅ `Player.prefab`：PlayerCamera 组件 `_pitchPivot`→`_viewPivot`（同 fileID）、删 `_motor`；Motor 组件补 `_camera`/`_graphicRenderer` 引用、删 `_lookSensitivity`；
+  5. ✅ 推论落档：Owner 自己实例的逻辑根从此**完全不旋转**（视觉 Yaw 在相机支架上）；其他端看到的该玩家朝向 = 服务器侧 `MoveRotation` → reconcile Yaw → 观察端 `Reconcile()` 写入（`_spectatorSmoothedProperties=255` 含旋转，远端平滑）。
+- **待验证（Unity 内，双开跑一遍）**：边转视角边移动正常；本机视角平滑；Scene 视图能看到自己的胶囊；远端玩家移动/转向平滑。验证通过后：
+  - 删除 `_logMoveDiagnostics` 诊断代码（TODO 已注明）；
+  - 重跑 M3 物理验收用例 P1/P3/P4（Kinematic 推球机制尚未重新验收）；
+  - 本条整段删除。
+- 备注：`ReadLook()` 现在只剩 PlayerCamera 一个每帧读者（Motor 不再读 Look），"每帧一个读者"已满足。
+
 ---
 
-### [ ] M4 球 reconcile + 图形平滑（P0-2 核心后半，★评审核心）
+### [~] M4 球 reconcile + 图形平滑（P0-2 核心后半，★评审核心）
 
 **目标**：双人同一 Tick 对冲撞球，双端轨迹一致、无瞬移、无严重错位。
 
-工作项：
-- `SharedBall` 接 `PredictionRigidbody` + `BallPrediction(NetworkBehaviour)`，采用官方示例的「rigidbodies without client input」模式：客户端本地模拟 + 服务器状态 reconcile。
-- 球的 Reconcile 只同步 Rigidbody 状态（位置/速度/角速度），无误判、无过度回滚。
-- 图形体（Graphic 子物体）由平滑层驱动，回滚不造成画面瞬移。
-- 调参集中在 `PhysicsTuning`，对齐检查顺序：TickRate/fixedDeltaTime → reconcile 频率 → 图形平滑。
+**实现已落盘（2026-10-01 by WorkBuddy，待 Unity 内验证 + T3 用例验收后勾选）**：
+- ✅ 新增 `Assets/_Project/Scripts/Ball/BallPrediction.cs`：reconcile-only 预测。`BallReconcileData : IReconcileData` 携带 `PredictionRigidbody`（完整刚体状态）；OnPostTick 构建 reconcile；服务器经状态转发发给所有观察者，客户端写回 + Graphic 平滑。骨架 = 包内 `Demos/Prediction/Rigidbody`。
+- ⚠️ **2026-10-01 ILPP 报错修复**：初版"无 [Replicate]"写法被 FishNet Codegen 拒绝（`BallPrediction must contain both a [Replicate] and [Reconcile] method when using prediction`，见包内 `PredictionProcessor.cs` 的成对校验）。修正为**空 [Replicate]**：`NoInput : IReplicateData`（空载荷）+ 空方法体 `Move(NoInput, ...)`，OnTick 内 `Move(default)` 推进 replicate 队列/历史，使重放与 reconcile 的 Tick 对齐机制正常工作。物理仍由 TimeManager 统一步进，方法体无事可做但调用链不可省。
+- ✅ `SharedBall.prefab`：`_enablePrediction: 1`、`_predictionType: 1`（Rigidbody）、`_graphicalObject` → Graphic 子物体（平滑层）、移除 NetworkTransform（与预测抢写 Transform，M2 过渡方案退役）、挂 BallPrediction（组件索引：BallImpactDispatcher=0，BallPrediction=1）。
+- ✅ `_enableStateForwarding: 1`（原有配置，reconcile 发给所有观察者而非仅 Owner）。
+- ⏳ 待验证（Unity 内，双开）：非主机推球是否当场弹开（M2 时代"1 RTT 延迟弹开"现象应消失）；双端球轨迹一致性；无瞬移。
+- 🔧 调参备选（按需）：球 `m_CollisionDetection: 0 → 2`（ContinuousDynamic，PHYSICS_DESIGN §7 高速穿透备选）；`PhysicsTuning` 平滑参数。
+
+**已确认现象（2026-10-01 双开实测，M2 临时方案的预期行为，M4 落地后自动消失，禁止在临时方案上修）**：
+- 非主机玩家推球 → 球延迟约 1 个 RTT + 插值缓冲后才弹开；主机玩家推球即时弹开。
+- 根因：`SharedBall` 当前 `_enablePrediction: 0` + NetworkTransform 快照同步（M2 过渡）。客户端上球的位置完全由服务器快照驱动：本地刚体即使被 Kinematic 玩家挤出一点点，也会立刻被快照拉回；服务器要等输入上行（½RTT）→ 本 Tick 模拟 → 球状态下发（½RTT）→ 插值缓冲，才表现为"弹开"。主机 = 服务器本身，输入零延迟、球本地模拟，所以即时。**这正是 M4 要消灭的东西**：reconcile-only 预测落地后，客户端的球是本地真实模拟的刚体，Kinematic 玩家推它当场就有物理反应（预测），服务器 reconcile 只做静默修正。
 
 **完成定义（T3 用例）**：两人从对侧同时冲撞同一球 **×10 次**，双端落点与速度一致，无瞬移、无严重错位。
 **这是全项目最关键的验收点，不合格不得进入 M9。**
+
+**UI 布局定案（2026-10-01，随 M4 一并落盘）**：Boot 场景 Leave Button 从右上角移至**左上角**（anchor/pivot (0,1)，pos (24,-24)），文案改为「退出游戏」；**右上角留给 NetworkDebugHud** 调试面板（原有位置不变）。`SphereRoomSetup.cs` 接线工具已同步（防误重跑倒退）。
 
 ---
 

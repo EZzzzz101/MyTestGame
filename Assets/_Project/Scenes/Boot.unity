@@ -840,11 +840,11 @@ RectTransform:
   - {fileID: 936700735}
   m_Father: {fileID: 666960488}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 1, y: 1}
-  m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -24, y: -24}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 24, y: -24}
   m_SizeDelta: {x: 180, y: 48}
-  m_Pivot: {x: 1, y: 1}
+  m_Pivot: {x: 0, y: 1}
 --- !u!1 &932614060
 GameObject:
   m_ObjectHideFlags: 0
@@ -994,7 +994,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\u65AD\u5F00\u8FDE\u63A5"
+  m_Text: "\u9000\u51FA\u6E38\u620F"
 --- !u!222 &936700737
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1294,7 +1294,7 @@ MonoBehaviour:
   _maximumFrameTicks: 3
   _tickRate: 50
   _pingInterval: 1
-  _physicsMode: 0
+  _physicsMode: 1
 --- !u!4 &1645781610
 Transform:
   m_ObjectHideFlags: 0

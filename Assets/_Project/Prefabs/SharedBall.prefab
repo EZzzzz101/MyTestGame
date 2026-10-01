@@ -12,8 +12,8 @@ GameObject:
   - component: {fileID: 4778236313604824147}
   - component: {fileID: 3056708525792902845}
   - component: {fileID: 4224255281310546376}
-  - component: {fileID: 7883978493494260077}
   - component: {fileID: 8600915832399539003}
+  - component: {fileID: 7209183462510934712}
   m_Layer: 8
   m_Name: SharedBall
   m_TagString: Untagged
@@ -53,10 +53,10 @@ MonoBehaviour:
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
-  _enablePrediction: 0
-  _predictionType: 0
+  _enablePrediction: 1
+  _predictionType: 1
   _localReconcileCorrectionType: 2
-  _graphicalObject: {fileID: 0}
+  _graphicalObject: {fileID: 2109618861745001293}
   _detachGraphicalObject: 0
   _enableStateForwarding: 1
   _networkTransform: {fileID: 0}
@@ -83,8 +83,8 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours:
-  - {fileID: 7883978493494260077}
   - {fileID: 8600915832399539003}
+  - {fileID: 7209183462510934712}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -144,7 +144,7 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.6
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &7883978493494260077
+--- !u!114 &7209183462510934712
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -153,43 +153,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 4504353641706119455}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Transforming.NetworkTransform
-  _componentIndexCache: 0
+  m_Script: {fileID: 11500000, guid: 3f8d2a9c5e1b4f7a8c6d0e2b9a4f5c7d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: SphereRoom.Ball::SphereRoom.Ball.BallPrediction
+  _componentIndexCache: 1
   _addedNetworkObject: {fileID: 4778236313604824147}
   _networkObjectCache: {fileID: 4778236313604824147}
-  _componentConfiguration: 2
-  _synchronizeParent: 0
-  _packing:
-    Position: 1
-    Rotation: 1
-    Scale: 0
-  _useScaledTime: 1
-  _interpolation: 2
-  _extrapolation: 2
-  _enableTeleport: 0
-  _teleportThreshold: 1
-  _clientAuthoritative: 0
-  _sendToOwner: 1
-  _interval: 1
-  _synchronizePosition: 1
-  _positionSensitivity: 0.001
-  _positionSnapping:
-    X: 0
-    Y: 0
-    Z: 0
-  _synchronizeRotation: 1
-  _rotationSnapping:
-    X: 0
-    Y: 0
-    Z: 0
-  _synchronizeScale: 1
-  _scaleSensitivity: 0.001
-  _scaleSnapping:
-    X: 0
-    Y: 0
-    Z: 0
 --- !u!114 &8600915832399539003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -200,9 +169,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6d8102e5adda4744a93e49b9d06d8f60, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: SphereRoom.Ball::SphereRoom.Ball.BallImpactDispatcher
-  _componentIndexCache: 1
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 4778236313604824147}
   _networkObjectCache: {fileID: 4778236313604824147}
   _minRelativeSpeed: 1.5

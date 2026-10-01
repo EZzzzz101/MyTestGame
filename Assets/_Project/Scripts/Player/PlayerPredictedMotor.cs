@@ -13,24 +13,39 @@ namespace SphereRoom.Player
     /// 执行侧：Owner 采集输入并预测；服务器在 Tick 内执行同一方法体并下发和解。
     /// 骨架：位置驱动的 Replicate/Reconcile（结构参考包内 Demos/Prediction/CharacterController，
     /// 但位移用 Physics.CapsuleCast 自解算 + MovePosition，不用 CharacterController）。
+    /// 层级与写入铁律（2026-10-01 "转动视角时无法移动"修复定案）：
+    /// - CameraPivot 必须挂在 Graphic（NetworkObject.GraphicalObject 平滑层）之下，否则相机跟随逻辑根以 Tick 步进 → 50Hz 顿挫；
+    /// - 逻辑根（Rigidbody 物体）的 Transform 只允许在 Tick 回调内经 Rigidbody API（MovePosition/MoveRotation）写入。
+    ///   渲染层（Update）直接写刚体物体会覆盖待生效的 MovePosition（Unity 官方明令禁止）——
+    ///   视角 Yaw 归 PlayerCamera（渲染层，相机支架），本组件只在 Tick 内经 ViewYaw 采样进输入。
     /// </summary>
     public sealed class PlayerPredictedMotor : TickNetworkBehaviour
     {
         [SerializeField] private PlayerInputReader _input;
+        [SerializeField] private PlayerCamera _camera;
         [SerializeField] private float _moveSpeed = PhysicsTuning.PlayerMoveSpeed;
-        [SerializeField] private float _lookSensitivity = PhysicsTuning.PlayerLookSensitivity;
+        [Tooltip("Graphic 子物体上的胶囊渲染器；本地 Owner 会把它的 GameObject 挪到 LocalPlayerBody 层（仅本相机剔除，Scene 视图仍可见）。")]
+        [SerializeField] private Renderer _graphicRenderer;
+
+        // TODO(M3): 临时诊断开关，定位"单向移动/移动鬼畜"后立即删除（含下面的 LogWarning）。
+        [Header("临时诊断（定位完删除）")]
+        [SerializeField] private bool _logMoveDiagnostics = true;
 
         private Rigidbody _rigidbody;
         private bool _isOwner;
         private float _yaw;
-        private float _pendingYaw;
         private float _lastGroundY;
+        private float _nextDiagnosticTime;
 
         private void Awake()
         {
             _rigidbody = GetComponent<Rigidbody>();
             if (_input == null)
                 _input = GetComponent<PlayerInputReader>();
+            if (_camera == null)
+                _camera = GetComponent<PlayerCamera>();
+            if (_graphicRenderer == null)
+                _graphicRenderer = GetComponentInChildren<Renderer>();
 
             _lastGroundY = transform.position.y;
             // TickNetworkBehaviour 需要显式声明要接收哪些 Tick 回调。
@@ -43,12 +58,12 @@ namespace SphereRoom.Player
             base.OnOwnershipClient(prevOwner);
 
             _isOwner = Owner != null && Owner.IsLocalClient;
-            if (_isOwner)
-            {
-                // 以当前朝向为基准继续累积，避免接手瞬间视角跳变。
-                _yaw = transform.eulerAngles.y;
-                _pendingYaw = _yaw;
-            }
+
+            // 本地 Owner 隐藏自己的胶囊（第一人称）：把 Graphic 挪到 LocalPlayerBody 层，
+            // 由 PlayerCamera 从 CullingMask 剔除。不用 renderer.enabled = false——那会连 Scene 视图一起隐藏，
+            // 调试时看不到自己。layer 非网络同步属性，只影响本端实例；其他客户端上同一玩家仍在 Default 层照常渲染。
+            if (_isOwner && _graphicRenderer != null)
+                _graphicRenderer.gameObject.layer = PhysicsLayers.LocalPlayerBody;
 
             if (_input == null)
                 return;
@@ -57,17 +72,6 @@ namespace SphereRoom.Player
                 _input.EnableInput();
             else
                 _input.DisableInput();
-        }
-
-        // [仅 Owner | 每帧] 视角采样：Look 是本地即时表现（不等 Tick），只把增量累加进 pendingYaw，
-        // 由下一 Tick 打包进 MoveInput 上行，保证回滚重放用的是同一份输入。
-        private void Update()
-        {
-            if (!_isOwner || _input == null)
-                return;
-
-            Vector2 look = _input.ReadLook();
-            _pendingYaw += look.x * _lookSensitivity;
         }
 
         // [双端 | Tick 驱动] 收集输入并执行 Replicate（回滚重放时同一方法体会被再次调用）。
@@ -83,13 +87,16 @@ namespace SphereRoom.Player
             CreateReconcile();
         }
 
-        /// <summary>[仅 Owner] 打包本 Tick 的输入；非 Owner（如服务器上的 AI 玩家）返回 default。</summary>
+        /// <summary>[仅 Owner] 打包本 Tick 的输入；非 Owner（如服务器上的 AI 玩家）返回 default。
+        /// Yaw 取自 PlayerCamera.ViewYaw（渲染层每帧累积的当前视角），Tick 边界采样一次——
+        /// 与视觉一致，且回滚重放用的是这份历史值，确定性好。</summary>
         private MoveInput BuildMoveData()
         {
             if (!_isOwner || _input == null)
                 return default;
 
-            return new MoveInput(_input.ReadMove(), _pendingYaw);
+            float yaw = _camera != null ? _camera.ViewYaw : _yaw;
+            return new MoveInput(_input.ReadMove(), yaw);
         }
 
         /// <summary>[双端] 构建和解数据：客户端也建一份，丢包时可临时兜底（官方示例同法）。</summary>
@@ -113,11 +120,35 @@ namespace SphereRoom.Player
             Vector3 direction = rotation * new Vector3(md.Move.x, 0f, md.Move.y);
             Vector3 desired = direction * (_moveSpeed * delta);
 
-            Vector3 next = ResolveMove(_rigidbody.position, desired);
+            Vector3 from = _rigidbody.position;
+            Vector3 next = ResolveMove(from, desired);
             next.y = ResolveGroundY(next.x, next.z);
 
             _rigidbody.MovePosition(next);
-            _rigidbody.MoveRotation(rotation);
+            // 朝向：Owner 的视觉 Yaw 由 PlayerCamera 在渲染层处理（本实例逻辑根不转，避免与 MovePosition 抢写）；
+            // 服务器 / 观察者实例在这里按输入写入，供其他端经 reconcile 状态看到本玩家的朝向。
+            if (!_isOwner)
+                _rigidbody.MoveRotation(rotation);
+
+            LogMoveDiagnostics(md, desired, from, next);
+        }
+
+        /// <summary>[仅诊断] 每秒打一行：输入向量、期望位移、解算前后位置。定位完删除本方法与调用。</summary>
+        private void LogMoveDiagnostics(MoveInput md, Vector3 desired, Vector3 from, Vector3 next)
+        {
+            if (!_logMoveDiagnostics)
+                return;
+
+            float now = Time.unscaledTime;
+            if (now < _nextDiagnosticTime)
+                return;
+
+            _nextDiagnosticTime = now + 1f;
+            Vector3 applied = next - from;
+            Debug.LogWarning($"[MoveDiag] tick={TimeManager.LocalTick} owner={_isOwner} move={md.Move} yaw={md.Yaw:0.0} " +
+                             $"desired=({desired.x:0.000},{desired.y:0.000},{desired.z:0.000}) " +
+                             $"from=({from.x:0.00},{from.y:0.00},{from.z:0.00}) " +
+                             $"applied=({applied.x:0.000},{applied.y:0.000},{applied.z:0.000}) groundY={_lastGroundY:0.00}");
         }
 
         // [双端 | Tick 驱动] 和解：Kinematic 直接写位置/朝向（没有速度需要恢复，载荷比 Dynamic 方案更小）。
@@ -125,6 +156,11 @@ namespace SphereRoom.Player
         private void Reconcile(PlayerReconcileState rd, Channel channel = Channel.Unreliable)
         {
             _rigidbody.position = rd.Position;
+
+            // Owner 的朝向完全由输入决定；用服务器回传的旧 yaw 覆盖会表现为视角来回抖动。
+            if (_isOwner)
+                return;
+
             _yaw = rd.Yaw;
             _rigidbody.rotation = Quaternion.Euler(0f, rd.Yaw, 0f);
         }
@@ -144,8 +180,11 @@ namespace SphereRoom.Player
                     break;
 
                 Vector3 dir = remaining / dist;
-                Vector3 p1 = position + Vector3.up * PhysicsTuning.CapsuleHalfSegment;
-                Vector3 p2 = position - Vector3.up * PhysicsTuning.CapsuleHalfSegment;
+                // 注意原点约定：本预制体的 CapsuleCollider.center = (0, 0.9, 0)，**物体原点在脚底**，
+                // 所以胶囊中心要先抬 CapsuleHalfHeight，再取上下两个球心（文档公式假设原点即胶囊中心）。
+                Vector3 capsuleCenter = position + Vector3.up * PhysicsTuning.CapsuleHalfHeight;
+                Vector3 p1 = capsuleCenter + Vector3.up * PhysicsTuning.CapsuleHalfSegment;
+                Vector3 p2 = capsuleCenter - Vector3.up * PhysicsTuning.CapsuleHalfSegment;
 
                 // 单次 CapsuleCast 自身无堆分配，不需要 NonAlloc 版本。
                 if (Physics.CapsuleCast(p1, p2, PhysicsTuning.PlayerRadius, dir, out RaycastHit hit,
@@ -179,11 +218,11 @@ namespace SphereRoom.Player
                     Vector3.down, out RaycastHit hit, PhysicsTuning.GroundProbeDistance,
                     PhysicsTuning.WorldLayerMask, QueryTriggerInteraction.Ignore))
             {
+                // 原点在脚底 → 脚底贴合地面就是原点取地面高度（不要再加 CapsuleHalfHeight）。
                 _lastGroundY = hit.point.y;
-                return _lastGroundY + PhysicsTuning.CapsuleHalfHeight;
             }
 
-            return _lastGroundY + PhysicsTuning.CapsuleHalfHeight;
+            return _lastGroundY;
         }
     }
 }
