@@ -5,7 +5,8 @@ using UnityEngine;
 namespace SphereRoom.Player
 {
     /// <summary>
-    /// 玩家移动（M1 非预测版）：Owner 自己在物理域移动与转向，NetworkTransform 把位姿同步给其他端。
+    /// 玩家移动（M1 非预测版）：Owner 用动态刚体在物理域移动与转向（关重力、冻结旋转），
+    /// NetworkTransform 把位姿同步给其他端。
     /// 执行侧：仅本地 Owner 驱动；远端对象只接受同步。
     /// 迁移：M3 通过**新增**预测组件（[Replicate]/[Reconcile] + PredictionRigidbody）替换本组件，
     /// 本类属 M1 已验收核心类，按 CODING_STANDARDS §8.1 不再修改。
@@ -64,7 +65,8 @@ namespace SphereRoom.Player
             _yaw += degrees;
         }
 
-        // [热路径] 转向与位移都在物理域完成，避免与运动学刚体的姿态写回互相覆盖。
+        // [热路径] 转向与位移都在物理域完成（MoveRotation/MovePosition）：
+        // 动态刚体才能被墙/柱挡住，也才能与球产生真实接触（kinematic 与静态、kinematic 之间都不产生接触）。
         private void FixedUpdate()
         {
             if (!_isOwner || _input == null)
