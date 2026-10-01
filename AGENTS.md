@@ -38,7 +38,8 @@ manifest.json 需包含（git URL 安装，详见 DEVELOPMENT_PLAN.md 第 7 节�
 
 Steam 路径需要：项目根与 Build 目录各放 `steam_appid.txt`，内容为 `480`。
 
-**API 参考优先级**：FishNet 官方文档（fish-networking.gitbook.io）> 包内 `Demos/`（尤其 `Demos/Prediction/Rigidbody`，骨架场景 `Rigidbody Prediction Demo.unity`）> 本文档。**预测代码以官方示例为骨架改造，不得凭记忆编写 API 调用**；若 API 与本文档描述有出入，以包内示例为准并在提交信息中注明。
+**API 参考优先级**：FishNet 官方文档（fish-networking.gitbook.io）> 包内 `Demos/` > 本文档。**预测代码以官方示例为骨架改造，不得凭记忆编写 API 调用**；若 API 与本文档描述有出入，以包内示例为准并在提交信息中注明。
+按用途选骨架：玩家移动用 `Demos/Prediction/CharacterController`（`CharacterController Prediction Demo.unity`）；球体 reconcile-only 用 `Demos/Prediction/Rigidbody`（`Rigidbody Prediction Demo.unity`）。
 
 ## 4. 目录结构（强制）
 
@@ -76,7 +77,9 @@ Assets/
 - 定时生成用 Tick 计数：`interval = 15 * TimeManager.TickRate`。
 
 ### 5.3 玩家（预测对象）
-- Rigidbody + CapsuleCollider + `PredictionRigidbody`；
+- **移动用 `CharacterController`**（自带与静态几何的扫掠碰撞，避免 kinematic 刚体穿墙、动态刚体又要逐个纠结质量/约束）；
+- 同物体保留 `CapsuleCollider` + **运动学 `Rigidbody`**：CC 不参与 PhysX 接触，推球必须靠这个接触体（kinematic × dynamic 才产生接触）；
+- 预测骨架用包内 `Demos/Prediction/CharacterController`（位置 + 垂直速度进 reconcile），不用 `PredictionRigidbody`；
 - 输入结构体：`MoveInput { Vector2 Move; float Yaw; }`（Pitch 只作用本地相机，不同步）；
 - 移动在 `[Replicate]` 方法内做，`[Reconcile]` 内回滚重放；
 - 远程玩家朝向用低频 SyncVar 同步 yaw，仅用于视觉。
