@@ -200,16 +200,25 @@ M0 工程基线
 
 ---
 
-### [ ] M5 中途加入（P1-1）
+### [~] M5 中途加入（P1-1）
 
 **目标**：球滚动中，新客户端加入后位置与速度正确。
 
 工作项：确认 reconcile 流在 Late Join 时携带完整 Rigidbody 状态；新客户端不做一次性瞬移修正。
 **完成定义（T4）**：球滚动中 C 加入，C 端球的位置与速度方向正确，无瞬移。
 
+**M5 追加范围（2026-10-01 用户定案）——玩家进出提示 + 踢球音效，已落盘待验证**：
+- ✅ 新增 `Network/RoomAnnouncer.cs`：服务器监听 `ServerManager.OnRemoteConnectionState`（两参签名，用 `args.ConnectionId`），经 `[ObserversRpc]` 广播「编号 + 进/出」；挂在 Room 场景 GameManager（全局场景 NetworkObject，中途加入者也能收到，含自己进入的提示）。主机自己的进出不播报（启动时无观察者；主机退出走 M6）。
+- ✅ 新增 `UI/RoomToastUI.cs`：顶部居中一行「X 号玩家进入/离开房间」，保持 2s + 渐隐 0.8s（Update 计时，纯表现层）；**不遮挡射线**：Toast Canvas 不挂 GraphicRaycaster + Text.raycastTarget=false 双保险；播放进入退出音效（事件回调拼字符串，事件频率非热路径）。
+- ✅ 踢球音效（原 M8 前置到 M5）：`BallImpactData` 新增 `KickerClientId`（-1=非玩家接触）；`BallImpactDispatcher` 服务器侧解析踢球者（`attachedRigidbody` 反查 NetworkObject→Owner，**不用层判定**——玩家逻辑根在 Default 层不在 Player 层；墙/柱无刚体天然排除，球撞球无 Owner 返回 -1）。新增 `Ball/BallAudioView.cs`（纯表现 MonoBehaviour）：**声音源头=足球**（音源挂 Graphic 子物体，3D 空间声随球移动衰减）。**双播放路径（声音预测，2026-10-01 二次定案）**：踢球者本人经 `LocalKickPredicted`（客户端 OnCollisionEnter 检测本地玩家踢球）零延迟立即出声——M4 起球在踢球者客户端本地真实模拟，等广播回传（½RTT）会视觉即时/听觉延迟打架；服务器广播回传的同一事件用 `IsLocallyPredictedKick` 跳过（防双响，主机例外：主机无预测路径，广播到达即播）；其他人踢的球不抢跑，等广播统一时间线。
+- ⚠️ **踢球判定关键补丁**：M3 起玩家是 Kinematic（velocity 恒 0），推静止球时 `collision.relativeVelocity ≈ 0` 会被 MinImpactSpeed=1.5 滤掉。已补第二条判据：`effectiveSpeed = max(relativeVelocity, impulse / BallMass)`（depenetration 冲量换算速度变化）。**若实测推球仍无音效，调参备选：降低 MinImpactSpeed 或改用玩家当前移动速度做阈值**。
+- ⚠️ **鬼畜连响修复（2026-10-01 双开实测）**：球被玩家顶在墙角 / 贴墙滑行 / 客户端踢向主机胶囊（Kinematic 等效无限质量，不干脆弹开）时，`OnCollisionEnter` 高频重触发（每 Tick 一次 depenetration 冲量都过阈值；reconcile 修正回重叠后本地又撞一次），音效变机枪。根因是物理事件频率，不是网络。**修复 = 事件源节流**：`BallImpactDispatcher._minEventInterval = 0.2s`（服务器广播与客户端预测分支共用 `PassesEventThrottle()`）。若还觉得密，调大该值；若嫌迟钝，调小。
+- ✅ 接线：`SphereRoomSetup` 新增菜单项「M5+M6 增量接线」（增量不重建、可重复执行，见 M6 节）。Unity 侧先编译再执行。
+- ⏳ 待验证：T4 用例 + 双开看进入/退出提示与音效、踢球音效（含"踢的人自己听不到"）。
+
 ---
 
-### [ ] M6 主机退出（P1-2）
+### [~] M6 主机退出（P1-2）
 
 **目标**：Host 消失时客户端有明确反馈且可恢复。
 
@@ -217,24 +226,51 @@ M0 工程基线
 **完成定义（T5）**：Host 关进程，客户端弹提示、不崩、能返回菜单并重连。
 **取舍**：不做 Host Migration，README 写明理由。
 
----
-
-### [ ] M7 定时生成（P1-3）
-
-**目标**：Host 每 15s 随机位置生成一球，数量受控。
-
-工作项：`BallSpawner` 用 Tick 计数（`interval = 15 * TimeManager.TickRate`，禁 Update/协程）；服务器 `System.Random`；XZ 随机、Y=2；上限 8 球，超限 Despawn 最旧。
-**完成定义（T6）**：挂机 45s，3 个球按 15s 间隔出现；第 9 个球出现时最旧的消失。
+**实现已落盘（2026-10-01 by WorkBuddy，待 Unity 内验证后勾选）**：
+- ✅ 「要不要做」已定案：**做**。M9 Steam 只改「怎么找到房间、怎么连」（大厅发现 + P2P 传输），不改「主机掉线后客户端怎么办」——`OnClientConnectionState` 的断开语义在 Tugboat / SteamworksSockets 下一致，「返回大厅」恢复路径 M9 原样复用。
+- ✅ `NetworkBootstrap`：新增 `_stopRequestedLocally`（StopNetwork 先立标记再停，区分主动退出 / 意外掉线）；`HostConnectionLost` 事件（仅客户端模式 + 非主动断开时触发，且在 StatusChanged 之后，保证最终只见解散面板）；`ReturnToBoot()` = StopNetwork + 卸载 Room 场景（全局叠加场景不会随断开自动卸载，isLoaded 判空兜底）。
+- ✅ 新增 `UI/RoomClosedUI.cs`：「房间已解散 / 与主机的连接已断开」面板 + 「返回大厅」按钮（不用「返回组队」——当前 Boot 的 Host/Join 菜单就是组队界面）。显示期间隐藏主菜单（两个居中面板不叠加）；点击 = 恢复菜单 + ReturnToBoot。主动点「退出游戏」不触发本面板。
+- ✅ 接线：`SphereRoomSetup` 菜单项「M5+M6 增量接线」在 Boot 场景 Menu Canvas 下建 Room Closed Panel（含 _menuPanel 私有字段经 SerializedObject 转交）。**执行前先保存当前场景**（工具会切场景）。
+- ⏳ 待验证：T5 用例（Host 关进程 → 客户端弹面板不崩 → 返回大厅 → 重新 Host/Join）。已知边界：加入失败（地址不通）也会走同一面板，文案为「房间已解散」略有出入，测试项目可接受。
 
 ---
 
-### [ ] M8 Tapped 提示（P1-4）
+### [~] M7 定时生成（P1-3）
+
+**目标**：Host 每 15s 随机位置生成一球，数量受控（**上限 4 个，2026-10-02 定案**）。
+
+工作项：`BallSpawner` 用 Tick 计数（`interval = 15 * TimeManager.TickRate`，禁 Update/协程）；服务器 `System.Random`；XZ 随机、Y=2；上限 4 球，超限 Despawn 最旧。
+**完成定义（T6，按 4 球上限改写）**：挂机 45s 场上共 4 个球（开局 1 + 15/30/45s 各 1），按 15s 间隔出现；**第 5 个球出现（60s）时最旧的消失**。
+
+**实现已落盘（2026-10-02 by WorkBuddy，待 Unity 内验证）**：
+- ✅ `PhysicsTuning.MaxBallCount` 8 → **4**；新增 `BallSpawnRandomRange = 4f`（XZ 半幅：房间半宽 10、柱子在 ±5，取 ±4 避开柱子与墙）。
+- ✅ `BallSpawner` 增量扩展（不改既有行为）：新增 `SpawnBallAt(Vector3[, Quaternion])`（M7 的随机位置生成）与 `DespawnBall()`（**先发 `BallDespawned` 再真正 Despawn**，让订阅者能反订阅）+ 新事件 `BallDespawned`。
+- ✅ 新增 `Ball/BallSpawnScheduler.cs`（挂 GameManager，AGENTS §8.1 新组件接入）：订阅 `TimeManager.OnTick`，`LocalTick % SpawnIntervalTicks == 0` 时随机 XZ + Y=2 生成；开局球（Tick 0）不重复生成；生成后 `TrimToMax()`——先清掉失效引用，再 while 超上限就销毁队首（最旧）。用 `List` 而非 `Queue`，因为要支持移除中间项。
+- ✅ **球对象池（2026-10-02）**：M7 让球一直在上下场（15s 补一个、超 4 个淘汰最旧），等于持续 Instantiate/Destroy。改用 FishNet 自带池：`NetworkManager.GetPooledInstantiated(prefab, pos, rot, asServer)` 取（池空才 Instantiate），`ServerManager.Despawn(nob, DespawnType.Pool)` 回收；`OnStartServer` 里 `CacheObjects` 预热 `MaxBallCount` 个。
+  - ⚠️ 池取出来的是**已实例化但未 Spawn** 的对象（`DefaultObjectPool.RetrieveObject` 只做 Instantiate + 摆位置 + `SetActive(true)`），`ServerManager.Spawn` 仍要自己调——**池只省实例化，不省网络同步**。
+  - ⚠️ FishNet 回池只 `ResetState`（重置 NetworkObject 自身状态），**不碰 Rigidbody**：`BallSpawner.ResetForReuse` 必须清 `velocity`/`angularVelocity`，否则淘汰掉的高速球下次生成会带着旧速度飞出去；再 `WakeUp()`，否则失活前睡着的球复用后会悬在空中不下落。
+  - ⚠️ 复用还带走了 `BallImpactDispatcher._lastEventTime`，已在 `OnStartNetwork`（每次 Spawn 都走，含池复用）里重置。
+- ⏳ 待验证：T6（挂机 45s 数球、60s 看最旧消失）；T6b——第 5 个球出现时旧球**回池不消失实例**（Hierarchy 里失活而非销毁），且新球从生成点自由落体、不带旧速度。
+
+---
+
+### [~] M8 Tapped 提示（P1-4）
 
 **目标**：被球撞到的玩家自己看到 "Tapped"，别人看不到。
 
-工作项：Host 端球×玩家 `OnCollisionEnter` 判定 → `TargetRpc` 到该连接 → 该客户端 UI 显示 2s 后淡出。
-工作项（补充）：音频表现层 `BallAudioView` 订阅 M2 预留的 `BallImpacted` 播放踢中音效；滚动声由同步速度本地驱动（不订阅网络事件，M4 起速度才准确）。音源资产到 M8 再定。
+工作项：Host 端球×玩家 `OnCollisionEnter` 判定 → `TargetRpc` 到该连接 → 该客户端 UI 显示。
+工作项（补充，2026-10-01 更新）：踢球音效已随 M5 前置完成（BallAudioView + 足球音效 + KickerClientId，见 M5 节）。
 **完成定义（T7）**：A 撞球时只有 A 显示 Tapped，B/C 无提示。
+
+**实现已落盘（2026-10-02 by WorkBuddy，按用户定案调整）**：
+- ✅ **碰到就显示、分开就失活（2026-10-02 二次改）**：砍掉原"撞击后 `_visibleSeconds = 1s` 隐藏"的倒计时——接触是持续状态，用计时器猜结束时间必然与真实接触错位（贴着球走会提前消失、被顶在墙角会一直挂着）。改为由服务器的**接触结束**事件明确收掉，UI 只剩 `SetActive(true/false)` 两个分支，无 Update、无计时。
+- ✅ **单独组件（不与音效共用回调，清晰优先）**：`Ball/TappedDispatcher.cs`（挂 GameManager）+ `UI/TappedIndicator.cs`（挂 Toast Canvas，驱动 `Toast Canvas/Tapped` 节点）。
+- ✅ 链路：服务器侧 `TappedDispatcher` 订阅 `BallSpawner.BallSpawned` → 给每个球挂 `BallContacted`（接触开始）/ `BallSeparated`（`OnCollisionExit`，接触结束）→ 维护「球×玩家」接触表 → `KickerClientId` 经 `ServerManager.Clients` 找连接 → `[TargetRpc] RpcSetTapped(bool)` 只发给被碰玩家 → 本机翻成 `Tapped` / `Released` 事件。
+- ⚠️ **为什么接触状态不能复用 `BallImpacted`**：撞击广播带 0.2s 节流（压音效鬼畜），被吞掉的那次撞击就点不亮 Tapped。所以 `BallImpactDispatcher` 另开一对**不节流**的 `BallContacted` / `BallSeparated`，只走本地服务器侧、不广播。
+- ⚠️ **为什么用"接触对"列表而不是计数器**：挤压时 `OnCollisionEnter/Exit` 会来回抖动，按 (球, 玩家) 去重不会把同一次接触算两次，也能容忍漏掉的 Enter。球被销毁 / 玩家掉线都会主动清表，避免 Tapped 永远亮着。
+- ⚠️ **为什么不让 UI 直接订阅球**：球是运行时生成的，场景里的 Tapped UI 拿不到它的引用；经常驻场景对象 GameManager 中转，UI 才能在场景里稳定序列化订阅（同理 M5 的 RoomAnnouncer 也挂在 GameManager 上）。
+- ⚠️ **滚动声 / 撞墙声不做**（2026-10-02 定案：球多起来声音太乱）。`BallAudioView` 只保留踢球音效。
+- ⏳ 待验证：T7（A 撞球只有 A 的屏幕显示 Tapped；B/C 无提示）；T7b 新增——**球离开后立刻失活**（贴着球走时保持显示，走开即消失）。
 
 ---
 

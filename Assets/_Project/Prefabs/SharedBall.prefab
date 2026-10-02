@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 4224255281310546376}
   - component: {fileID: 8600915832399539003}
   - component: {fileID: 7209183462510934712}
+  - component: {fileID: 8613613335012272459}
   m_Layer: 8
   m_Name: SharedBall
   m_TagString: Untagged
@@ -144,21 +145,6 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.6
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &7209183462510934712
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4504353641706119455}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3f8d2a9c5e1b4f7a8c6d0e2b9a4f5c7d, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: SphereRoom.Ball::SphereRoom.Ball.BallPrediction
-  _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 4778236313604824147}
-  _networkObjectCache: {fileID: 4778236313604824147}
 --- !u!114 &8600915832399539003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -169,12 +155,45 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6d8102e5adda4744a93e49b9d06d8f60, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: SphereRoom.Ball::SphereRoom.Ball.BallImpactDispatcher
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 4778236313604824147}
   _networkObjectCache: {fileID: 4778236313604824147}
   _minRelativeSpeed: 1.5
+  _minEventInterval: 0.2
+--- !u!114 &7209183462510934712
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4504353641706119455}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f8d2a9c5e1b4f7a8c6d0e2b9a4f5c7d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SphereRoom.Ball::SphereRoom.Ball.BallPrediction
+  _componentIndexCache: 1
+  _addedNetworkObject: {fileID: 4778236313604824147}
+  _networkObjectCache: {fileID: 4778236313604824147}
+  _tickCallbacks: 6
+--- !u!114 &8613613335012272459
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4504353641706119455}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6382d8fb5b06e1e439e43a33c5ef555b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SphereRoom.Ball::SphereRoom.Ball.BallAudioView
+  _dispatcher: {fileID: 8600915832399539003}
+  _source: {fileID: 5810685182241318815}
+  _kickClip: {fileID: 8300000, guid: b3b658d24c39b5747a1bdf27ba716268, type: 3}
+  _maxKickSpeed: 8
 --- !u!1 &7266755818760091141
 GameObject:
   m_ObjectHideFlags: 0
@@ -186,6 +205,7 @@ GameObject:
   - component: {fileID: 2109618861745001293}
   - component: {fileID: 5809917831549644787}
   - component: {fileID: 6966345276486456701}
+  - component: {fileID: 5810685182241318815}
   m_Layer: 0
   m_Name: Graphic
   m_TagString: Untagged
@@ -265,3 +285,100 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!82 &5810685182241318815
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7266755818760091141}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 2
+  MaxDistance: 30
+  Pan2D: 0
+  rolloffMode: 1
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4

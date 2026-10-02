@@ -23,13 +23,17 @@ namespace SphereRoom.Ball
         /// <summary>发生碰撞的网络 Tick。</summary>
         public uint Tick;
 
-        public BallImpactData(int ballObjectId, Vector3 point, Vector3 normal, float relativeSpeed, uint tick)
+        /// <summary>踢球者编号（-1 = 非玩家接触：撞墙 / 撞柱 / 球撞球）。表现层用它区分踢球与撞击，并排除踢球者本人。</summary>
+        public int KickerClientId;
+
+        public BallImpactData(int ballObjectId, Vector3 point, Vector3 normal, float relativeSpeed, uint tick, int kickerClientId)
         {
             BallObjectId = ballObjectId;
             Point = point;
             Normal = normal;
             RelativeSpeed = relativeSpeed;
             Tick = tick;
+            KickerClientId = kickerClientId;
         }
     }
 }

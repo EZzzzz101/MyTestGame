@@ -38,6 +38,8 @@ namespace SphereRoom.Core.Editor
         private const string BallPhysicsMaterialPath = "Assets/_Project/Materials/Phys_Ball.physicMaterial";
         private const string BootScenePath = "Assets/_Project/Scenes/Boot.unity";
         private const string RoomScenePath = "Assets/_Project/Scenes/Room.unity";
+        private const string PresenceClipPath = "Assets/_Project/Audio/进入退出音效.mp3";
+        private const string KickClipPath = "Assets/_Project/Audio/足球音效.mp3";
 
         private const ushort DefaultPort = 7770;
 
@@ -100,6 +102,292 @@ namespace SphereRoom.Core.Editor
             BuildBootScene(playerAsset.GetComponent<NetworkObject>());
             AssetDatabase.SaveAssets();
             Debug.Log("[SphereRoom] Boot / Room 场景已重建。");
+        }
+
+        /// <summary>
+        /// M5+M6 增量接线：只新增对象与组件，不重建既有资产（与「一键重建」互不影响，可重复执行）。
+        /// 内容：① Room 场景 GameManager 挂 RoomAnnouncer + 新建 Toast Canvas（无 GraphicRaycaster，永不遮挡射线）；
+        /// ② Boot 场景 Menu Canvas 下新建 Room Closed Panel（房间解散提示）；
+        /// ③ SharedBall 预制体 Graphic 挂 3D 音源 + 根挂 BallAudioView，绑两个音效。
+        /// ⚠️ 执行前先保存当前打开的场景——本方法会切换活动场景（Single 模式打开 Boot / Room）。
+        /// </summary>
+        [MenuItem("SphereRoom/Setup/M5+M6 增量接线（进入退出提示 + 音效 + 房间解散）", priority = 10)]
+        public static void ApplyM5M6Increment()
+        {
+            AudioClip presenceClip = AssetDatabase.LoadAssetAtPath<AudioClip>(PresenceClipPath);
+            AudioClip kickClip = AssetDatabase.LoadAssetAtPath<AudioClip>(KickClipPath);
+            if (presenceClip == null || kickClip == null)
+            {
+                Debug.LogError($"[SphereRoom] 找不到音效资产：{PresenceClipPath} / {KickClipPath}。");
+                return;
+            }
+
+            // 先做完 Room 场景的两段（M5 提示 + M8 Tapped），再切 Boot，最后改预制体。
+            ApplyRoomSceneM5(presenceClip);
+            ApplyRoomSceneM8();
+            ApplyBootSceneM6();
+            ApplyBallPrefabM5(kickClip);
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[SphereRoom] M5+M6 增量接线完成：Room 广播与提示 UI、Boot 房间解散面板、球体音源已就位。");
+        }
+
+        /// <summary>
+        /// M5 · Room 场景：GameManager 挂 RoomAnnouncer；Toast Canvas 及其子节点**只补不删**（非破坏式）。
+        /// ⚠️ 早期版本是"整棵 Canvas 删了重建"，把手放在 Canvas 下的自定义节点（如 M8 的 Tapped）一起删掉了——
+        /// 已改为：已有 Canvas 复用、子节点缺哪个建哪个、绝不删除用户摆放的节点（2026-10-02 修复）。
+        /// </summary>
+        private static void ApplyRoomSceneM5(AudioClip presenceClip)
+        {
+            Scene scene = EditorSceneManager.OpenScene(RoomScenePath, OpenSceneMode.Single);
+
+            BallSpawner spawner = Object.FindFirstObjectByType<BallSpawner>();
+            if (spawner == null)
+            {
+                Debug.LogError("[SphereRoom] Room 场景里找不到 GameManager（BallSpawner），请先执行场景重建。");
+                return;
+            }
+
+            RoomAnnouncer announcer = spawner.GetComponent<RoomAnnouncer>();
+            if (announcer == null)
+                announcer = spawner.gameObject.AddComponent<RoomAnnouncer>();
+
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+            // 复用已有 Toast Canvas（找不到才建）：不能删——下面可能有用户手放的节点。
+            RoomToastUI toastUi = Object.FindFirstObjectByType<RoomToastUI>(FindObjectsInactive.Include);
+            GameObject canvasObject;
+            if (toastUi != null)
+            {
+                canvasObject = toastUi.gameObject;
+            }
+            else
+            {
+                canvasObject = new GameObject("Toast Canvas");
+                Canvas canvas = canvasObject.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 5;
+                // 故意不挂 GraphicRaycaster：整块画布永不参与 UI 射线检测（需求：不遮挡射线）。
+                toastUi = canvasObject.AddComponent<RoomToastUI>();
+            }
+
+            // Presence Toast：缺才建，已有则复用（保留用户的布局调整）。
+            Transform presenceTransform = canvasObject.transform.Find("Presence Toast");
+            GameObject toastObject;
+            if (presenceTransform != null)
+            {
+                toastObject = presenceTransform.gameObject;
+                if (toastObject.GetComponent<CanvasGroup>() == null)
+                    toastObject.AddComponent<CanvasGroup>();
+                if (toastObject.GetComponent<Text>() == null)
+                    toastObject.AddComponent<Text>();
+            }
+            else
+            {
+                toastObject = new GameObject("Presence Toast", typeof(RectTransform), typeof(Text), typeof(CanvasGroup));
+                toastObject.transform.SetParent(canvasObject.transform, false);
+                RectTransform toastRect = toastObject.GetComponent<RectTransform>();
+                toastRect.anchorMin = new Vector2(0.5f, 1f);
+                toastRect.anchorMax = new Vector2(0.5f, 1f);
+                toastRect.pivot = new Vector2(0.5f, 1f);
+                toastRect.anchoredPosition = new Vector2(0f, -48f);
+                toastRect.sizeDelta = new Vector2(640f, 44f);
+            }
+
+            Text toastText = toastObject.GetComponent<Text>();
+            toastText.font = font;
+            toastText.fontSize = 24;
+            toastText.alignment = TextAnchor.MiddleCenter;
+            toastText.color = Color.white;
+
+            CanvasGroup group = toastObject.GetComponent<CanvasGroup>();
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            // Toast Audio：缺才建。
+            Transform audioTransform = canvasObject.transform.Find("Toast Audio");
+            GameObject audioObject;
+            if (audioTransform != null)
+            {
+                audioObject = audioTransform.gameObject;
+            }
+            else
+            {
+                audioObject = new GameObject("Toast Audio");
+                audioObject.transform.SetParent(canvasObject.transform, false);
+            }
+
+            AudioSource source = audioObject.GetComponent<AudioSource>();
+            if (source == null)
+                source = audioObject.AddComponent<AudioSource>();
+            source.playOnAwake = false;
+            source.spatialBlend = 0f;
+
+            SetObjectReference(toastUi, "_announcer", announcer);
+            SetObjectReference(toastUi, "_toastText", toastText);
+            SetObjectReference(toastUi, "_canvasGroup", group);
+            SetObjectReference(toastUi, "_audioSource", source);
+            SetObjectReference(toastUi, "_presenceClip", presenceClip);
+
+            EditorSceneManager.SaveScene(scene);
+        }
+
+        /// <summary>
+        /// M7+M8 · Room 场景：GameManager 挂 BallSpawnScheduler（定时生成 + 4 球上限）与 TappedDispatcher（TargetRpc 派发）；
+        /// Toast Canvas 挂 TappedIndicator 并接上你放好的 Tapped 节点。
+        /// **非破坏式**：组件 / 节点存在就复用只刷接线，缺什么补什么——重复跑不会删掉用户在场景里摆好的东西。
+        /// </summary>
+        private static void ApplyRoomSceneM8()
+        {
+            BallSpawner spawner = Object.FindFirstObjectByType<BallSpawner>();
+            RoomToastUI toastUi = Object.FindFirstObjectByType<RoomToastUI>(FindObjectsInactive.Include);
+            if (spawner == null || toastUi == null)
+            {
+                Debug.LogError("[SphereRoom] Room 场景缺少 GameManager 或 Toast Canvas，请先跑 M5+M6 增量接线 / 场景重建。");
+                return;
+            }
+
+            // 1) GameManager：定时生成调度器（默认参数来自 PhysicsTuning，无需接线）。
+            BallSpawnScheduler scheduler = spawner.GetComponent<BallSpawnScheduler>();
+            if (scheduler == null)
+                scheduler = spawner.gameObject.AddComponent<BallSpawnScheduler>();
+            SetObjectReference(scheduler, "_spawner", spawner);
+
+            // 1b) 对象池：球被定时生成 + 超限淘汰反复上下场，开启复用并预热到上限数量。
+            SetBool(spawner, "_usePooling", true);
+            SetInt(spawner, "_prewarmCount", PhysicsTuning.MaxBallCount);
+
+            // 2) GameManager：Tapped 派发器（服务器按 KickerClientId → TargetRpc）。
+            TappedDispatcher tappedDispatcher = spawner.GetComponent<TappedDispatcher>();
+            if (tappedDispatcher == null)
+                tappedDispatcher = spawner.gameObject.AddComponent<TappedDispatcher>();
+            SetObjectReference(tappedDispatcher, "_spawner", spawner);
+
+            // 3) Toast Canvas：Tapped 提示。用户在 Canvas 下放好了 Tapped 就直接用（不碰它的布局）；
+            // 没有（例如被旧版工具误删过）就按默认位置建一个。
+            Transform tapped = toastUi.transform.Find("Tapped");
+            if (tapped == null)
+            {
+                Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                GameObject tappedObject = new GameObject("Tapped", typeof(RectTransform), typeof(Text));
+                tappedObject.transform.SetParent(toastUi.transform, false);
+
+                RectTransform tappedRect = tappedObject.GetComponent<RectTransform>();
+                tappedRect.anchorMin = new Vector2(0.5f, 1f);
+                tappedRect.anchorMax = new Vector2(0.5f, 1f);
+                tappedRect.pivot = new Vector2(0.5f, 1f);
+                tappedRect.anchoredPosition = new Vector2(0f, -110f);   // 提示文字下方一行
+                tappedRect.sizeDelta = new Vector2(400f, 40f);
+
+                Text tappedText = tappedObject.GetComponent<Text>();
+                tappedText.text = "Tapped";
+                tappedText.font = font;
+                tappedText.fontSize = 28;
+                tappedText.alignment = TextAnchor.MiddleCenter;
+                tappedText.color = Color.yellow;
+                tappedText.raycastTarget = false;
+
+                tapped = tappedObject.transform;
+                Debug.LogWarning("[SphereRoom] Toast Canvas 下没有 Tapped，已按默认位置新建一个（可自行拖动调整）。");
+            }
+
+            TappedIndicator indicator = toastUi.GetComponent<TappedIndicator>();
+            if (indicator == null)
+                indicator = toastUi.gameObject.AddComponent<TappedIndicator>();
+            SetObjectReference(indicator, "_dispatcher", tappedDispatcher);
+            SetObjectReference(indicator, "_tappedObject", tapped.gameObject);
+
+            EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
+        }
+
+        /// <summary>M6 · Boot 场景：Menu Canvas 下的 Room Closed Panel——非破坏式，已有则复用只刷接线。</summary>
+        private static void ApplyBootSceneM6()
+        {
+            Scene scene = EditorSceneManager.OpenScene(BootScenePath, OpenSceneMode.Single);
+
+            MainMenuUI menuUi = Object.FindFirstObjectByType<MainMenuUI>(FindObjectsInactive.Include);
+            NetworkBootstrap bootstrap = Object.FindFirstObjectByType<NetworkBootstrap>();
+            if (menuUi == null || bootstrap == null)
+            {
+                Debug.LogError("[SphereRoom] Boot 场景缺少 Menu Canvas 或 NetworkManager，请先执行场景重建。");
+                return;
+            }
+
+            // 主菜单面板是 MainMenuUI 的私有字段，经序列化对象读取再转交给 RoomClosedUI。
+            SerializedObject menuSerialized = new SerializedObject(menuUi);
+            Object menuPanel = menuSerialized.FindProperty("_menuPanel")?.objectReferenceValue;
+
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+            // 复用已有面板（不删——用户在里面摆的东西要保留）；没有才建。
+            Button returnButton;
+            Transform existingPanel = menuUi.transform.Find("Room Closed Panel");
+            GameObject panel;
+            if (existingPanel != null)
+            {
+                panel = existingPanel.gameObject;
+                Transform existingButton = panel.transform.Find("Return Button");
+                returnButton = existingButton != null
+                    ? existingButton.GetComponent<Button>()
+                    : CreateButton(panel.transform, "Return Button", "返回大厅", font, new Vector2(0f, -40f));
+            }
+            else
+            {
+                panel = CreatePanel(menuUi.transform, "Room Closed Panel", new Vector2(420f, 230f), Vector2.zero);
+                CreateText(panel.transform, "Title", "房间已解散", font, 30, new Vector2(0f, 60f), new Vector2(380f, 46f));
+                CreateText(panel.transform, "Reason", "与主机的连接已断开", font, 18, new Vector2(0f, 18f), new Vector2(380f, 30f));
+                returnButton = CreateButton(panel.transform, "Return Button", "返回大厅", font, new Vector2(0f, -40f));
+            }
+
+            // 组件同样复用：重复跑工具不该挂出第二个 RoomClosedUI。
+            RoomClosedUI closedUi = menuUi.GetComponent<RoomClosedUI>();
+            if (closedUi == null)
+                closedUi = menuUi.gameObject.AddComponent<RoomClosedUI>();
+            SetObjectReference(closedUi, "_bootstrap", bootstrap);
+            SetObjectReference(closedUi, "_panel", panel);
+            SetObjectReference(closedUi, "_returnButton", returnButton);
+            SetObjectReference(closedUi, "_menuPanel", menuPanel);
+
+            // 默认隐藏（运行期由 RoomClosedUI.Awake 再兜底一次）。
+            panel.SetActive(false);
+
+            EditorSceneManager.SaveScene(scene);
+        }
+
+        /// <summary>M5 · SharedBall 预制体：Graphic 挂 3D 音源，根挂 BallAudioView（普通 MonoBehaviour，不动 NetworkObject 行为列表）。</summary>
+        private static void ApplyBallPrefabM5(AudioClip kickClip)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(BallPrefabPath);
+
+            Transform graphic = root.transform.Find("Graphic");
+            BallImpactDispatcher dispatcher = root.GetComponent<BallImpactDispatcher>();
+            if (graphic == null || dispatcher == null)
+            {
+                Debug.LogError("[SphereRoom] SharedBall 预制体缺少 Graphic 子物体或 BallImpactDispatcher。");
+                PrefabUtility.UnloadPrefabContents(root);
+                return;
+            }
+
+            AudioSource source = graphic.GetComponent<AudioSource>();
+            if (source == null)
+                source = graphic.gameObject.AddComponent<AudioSource>();
+            source.playOnAwake = false;
+            source.spatialBlend = 1f;
+            source.rolloffMode = AudioRolloffMode.Linear;
+            source.minDistance = 2f;
+            source.maxDistance = 30f;
+
+            BallAudioView audioView = root.GetComponent<BallAudioView>();
+            if (audioView == null)
+                audioView = root.AddComponent<BallAudioView>();
+
+            SetObjectReference(audioView, "_dispatcher", dispatcher);
+            SetObjectReference(audioView, "_source", source);
+            SetObjectReference(audioView, "_kickClip", kickClip);
+
+            PrefabUtility.SaveAsPrefabAsset(root, BallPrefabPath);
+            PrefabUtility.UnloadPrefabContents(root);
         }
 
         #region Player 预制体
@@ -624,6 +912,20 @@ namespace SphereRoom.Core.Editor
             }
 
             property.intValue = value;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetBool(Object target, string propertyName, bool value)
+        {
+            SerializedObject serialized = new SerializedObject(target);
+            SerializedProperty property = serialized.FindProperty(propertyName);
+            if (property == null)
+            {
+                Debug.LogError($"[SphereRoom] 字段不存在：{target.GetType().Name}.{propertyName}");
+                return;
+            }
+
+            property.boolValue = value;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

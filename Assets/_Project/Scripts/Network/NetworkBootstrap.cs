@@ -28,6 +28,9 @@ namespace SphereRoom.Network
         private NetworkMode _mode = NetworkMode.Offline;
         private bool _roomLoadRequested;
 
+        // M6：区分「主动断开（点了退出游戏）」与「意外断开（主机掉了）」——只有后者才弹房间解散面板。
+        private bool _stopRequestedLocally;
+
         /// <summary>当前网络角色。</summary>
         public NetworkMode Mode => _mode;
 
@@ -40,6 +43,13 @@ namespace SphereRoom.Network
 
         /// <summary>网络状态变化：模式 + 面向 UI 的文案。只在事件驱动路径触发。</summary>
         public event Action<NetworkMode, string> StatusChanged;
+
+        /// <summary>
+        /// 主机连接意外断开（客户端视角，M6）：非本地主动退出的掉线。
+        /// UI 层（RoomClosedUI）订阅后弹「房间已解散」面板。在 StatusChanged 之后触发，
+        /// 保证 MainMenuUI 先把菜单弹出、本事件再把菜单藏起来，最终只见解散面板。
+        /// </summary>
+        public event Action HostConnectionLost;
 
         private void Awake()
         {
@@ -113,6 +123,9 @@ namespace SphereRoom.Network
             if (_networkManager == null)
                 return;
 
+            // 先立标记再停：StopConnection 触发的 Stopped 回调是异步的，到时用它区分主动 / 意外。
+            _stopRequestedLocally = true;
+
             if (_networkManager.ClientManager.Started)
                 _networkManager.ClientManager.StopConnection();
             if (_networkManager.ServerManager.Started)
@@ -121,6 +134,24 @@ namespace SphereRoom.Network
             _roomLoadRequested = false;
             _mode = NetworkMode.Offline;
             ReportStatus(_mode, "未联机");
+        }
+
+        /// <summary>
+        /// M6：从对局返回 Boot——断开网络并卸载 Room 场景。
+        /// Room 是全局叠加场景，断开连接不会自动卸载，不清理会残留在主菜单后面。
+        /// </summary>
+        public void ReturnToBoot()
+        {
+            StopNetwork();
+            UnloadRoomScene();
+        }
+
+        private static void UnloadRoomScene()
+        {
+            // 完全限定名：本文件已 using FishNet.Managing.Scened，其 SceneManager 与 UnityEngine 的同名。
+            UnityEngine.SceneManagement.Scene room = UnityEngine.SceneManagement.SceneManager.GetSceneByName(GameScenes.Room);
+            if (room.IsValid() && room.isLoaded)
+                _ = UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(room);
         }
 
         // [服务器 | 事件驱动（服务器连接状态变化）] 主机就绪后加载对局场景。
@@ -159,9 +190,17 @@ namespace SphereRoom.Network
                     if (_mode == NetworkMode.Offline)
                         return;
 
+                    bool wasClient = _mode == NetworkMode.Client;
                     _mode = NetworkMode.Offline;
                     _roomLoadRequested = false;
                     ReportStatus(_mode, "已断开连接");
+
+                    // M6：客户端非主动断开 = 主机掉了 → 通知 UI 弹房间解散面板。
+                    // 主动退出（自己点了退出游戏 / 返回大厅）走 _stopRequestedLocally 短路。
+                    if (wasClient && !_stopRequestedLocally)
+                        HostConnectionLost?.Invoke();
+
+                    _stopRequestedLocally = false;
                     break;
             }
         }
