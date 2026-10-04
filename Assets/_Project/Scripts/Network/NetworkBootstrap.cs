@@ -25,6 +25,9 @@ namespace SphereRoom.Network
         [Tooltip("主机启动后自动加载 Room 场景（全局场景，后加入的客户端也会加载）。")]
         [SerializeField] private bool _loadRoomSceneOnHostStart = true;
 
+        [Tooltip("M9：Multipass 的客户端传输选择。未挂时保持 M1 的单传输接线（TransportManager 直挂 Tugboat）行为不变。")]
+        [SerializeField] private TransportSelector _transportSelector;
+
         private NetworkMode _mode = NetworkMode.Offline;
         private bool _roomLoadRequested;
 
@@ -91,6 +94,13 @@ namespace SphereRoom.Network
             _mode = NetworkMode.Host;
             ReportStatus(_mode, "正在启动主机…");
 
+            // 主机进程内的本地客户端走 LAN：Steam 不允许同一 SteamID 与自己建立 P2P
+            // （FishySteamworks README「Testing Two Builds Locally」明示）。
+            // 服务器侧不需要选——Multipass 在 GlobalServerActions=true 时同时监听所有传输，
+            // 所以 LAN 的好友和 Steam 的好友能进同一局。
+            if (!TrySelectTransport(TransportKind.Lan, _address))
+                return;
+
             // listen server：本机同时是 Server 与 Client，端口由 Inspector 配置。
             _networkManager.ServerManager.StartConnection(_port);
             // 注意：本地客户端要等 Room 加载完成后再连（见 OnSceneLoadEnd）——
@@ -98,23 +108,55 @@ namespace SphereRoom.Network
             // 而后续加入的客户端都在 Room，导致两端玩家挂在不同的场景下。
         }
 
-        /// <summary>加入房间：用 Inspector 里配置的地址直连。</summary>
+        /// <summary>加入房间：用 Inspector 里配置的地址直连（LAN）。</summary>
         public void JoinGame()
         {
-            JoinGame(_address);
+            JoinGame(_address, TransportKind.Lan);
         }
 
         /// <summary>加入房间：指定地址直连（LAN）。</summary>
         public void JoinGame(string address)
         {
+            JoinGame(address, TransportKind.Lan);
+        }
+
+        /// <summary>
+        /// 加入房间：指定传输方式与地址。
+        /// Steam 时 address 是 **Host 的 SteamID64**（FishySteamworks 的客户端地址语义），不是 IP。
+        /// </summary>
+        public void JoinGame(string address, TransportKind kind)
+        {
             if (_networkManager == null || _mode != NetworkMode.Offline)
                 return;
 
-            _address = address;
             _mode = NetworkMode.Client;
             ReportStatus(_mode, "正在连接主机…");
 
+            if (!TrySelectTransport(kind, address))
+                return;
+
+            _address = address;
             _networkManager.ClientManager.StartConnection(address, _port);
+        }
+
+        /// <summary>[本地 | 事件驱动（Steam 邀请被接受）] 经 Steam 加入：地址即 Host 的 SteamID64。</summary>
+        public void JoinViaSteam(ulong hostSteamId)
+        {
+            JoinGame(hostSteamId.ToString(), TransportKind.Steam);
+        }
+
+        // [本地 | 事件驱动（发起连接前）] 选定本地客户端使用的传输并下发地址。
+        // 未挂 TransportSelector 时直接放行：保持 M1 的单传输接线仍然可用，M9 失败不会拖垮 LAN。
+        private bool TrySelectTransport(TransportKind kind, string address)
+        {
+            if (_transportSelector == null || _transportSelector.TrySelect(kind, address))
+                return true;
+
+            _mode = NetworkMode.Offline;
+            ReportStatus(_mode, kind == TransportKind.Steam
+                ? "Steam 传输不可用：检查 Steam 是否运行、是否执行过 M9 接线"
+                : "传输层未接线：请执行 SphereRoom/Setup/M9 Steam 接线");
+            return false;
         }
 
         /// <summary>断开并回到未联机状态。</summary>

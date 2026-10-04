@@ -28,7 +28,7 @@
 |----|------|-----------|
 | 网络框架 | **FishNet 4** | 唯一内置"预测→和解→回滚重演→图形平滑"完整管线且支持非玩家共享刚体的主流框架，直接命中 P0-2 评分核心；Mirror/NGO 无内置预测，双人争球必现拉扯回跳 |
 | LAN 传输 | **Tugboat**（UDP + 可靠通道） | 物理同步是高频小包、最新状态优先，UDP 免队头阻塞；Tugboat 自带可靠层覆盖事件消息，不裸 UDP、不自造轮子 |
-| Steam 传输 | **SteamworksSockets**（ISteamNetworkingSockets，UDP/SDR） | FishNet 官方配套，P2P + NAT 穿透全由 Steam 解决 |
+| Steam 传输 | **FishySteamworks**（ISteamNetworkingSockets，UDP/SDR） | FishNet 官方配套，P2P + NAT 穿透全由 Steam 解决。⚠️ 原名 `SteamworksSockets` 为笔误且仓库 404，真实仓库 `FirstGearGames/FishySteamworks`（依赖 Steamworks.NET） |
 | 拓扑 | **Host-Client**（listen server） | 题目指定主机权威；无专用服务器、无 Host Migration（FishNet 不支持；P1-2 用"提示+返回菜单"满足） |
 | 渲染管线 | **URP** | Unity 6 默认模板，选定后不切换 |
 | TickRate | **50 Hz**，`fixedDeltaTime = 0.02s` | 1 Tick = 1 物理步，完全对齐，回滚重演语义最干净 |
@@ -51,7 +51,7 @@
 ```
 
 - **无自建大厅服务器、无匹配系统、无专用游戏服务器**。"组队"语义由 Steam Lobby 承担（仅作发现/邀请层，存 Host 的 SteamID；游戏数据全部走 Host⇄Client P2P）；
-- **Steam 接入采用分层策略（LAN-first）**：M1-M3 全部跑 Tugboat LAN（ParrelSync 双开 Editor，分钟级迭代）；连接入口收敛在 Boot 菜单与 TransportMultiplexer，M4 一次性接 Steam（Lobby + P2P），游戏逻辑零改动。原因：物理同步是评分核心需要最快迭代回路；Steam P2P 联调需两台设备/两个 Steam 账号（单账号单机无法自连 P2P），回路慢，放最后；
+- **Steam 接入采用分层策略（LAN-first）**：M1-M3 全部跑 Tugboat LAN（ParrelSync 双开 Editor，分钟级迭代）；连接入口收敛在 Boot 菜单与 `Multipass`（⚠️ 原名 `TransportMultiplexer` 为错名），M4 一次性接 Steam（Lobby + P2P），游戏逻辑零改动。原因：物理同步是评分核心需要最快迭代回路；Steam P2P 联调需两台设备/两个 Steam 账号（单账号单机无法自连 P2P），回路慢，放最后；
 - 若需要"大厅组队 → 统一开局"的流程体验：等价实现 = Steam Lobby 当大厅（好友组队、Host 点开局），开局动作只是 Host 启动 listen server + 队友从 Lobby 取 Host 地址发起连接。自建大厅服务器的全部职责（房间列表、组队状态、Host 地址分发）Steam Lobby 均免费覆盖，且自建大厅不解决游戏数据的 NAT 穿透，本项目不做；
 - LAN 路径无 Steam 依赖，直连 IP 即入；
 - 中途加入是流程的一等公民（P1-1），不是特殊分支。
@@ -157,7 +157,7 @@ SharedBall (逻辑根: 同上)
 - Host 端 `OnCollisionEnter`（球×玩家）→ `TargetRpc` → 被碰玩家 UI 显示 "Tapped"（2s 淡出）；判定只在服务器。
 
 ### P2-1 Steam 联机
-- `TransportMultiplexer`：Tugboat + SteamworksSockets 并存（一个 Build 同时支持 LAN 与 Steam）；
+- `Multipass`：Tugboat + FishySteamworks 并存（一个 Build 同时支持 LAN 与 Steam）；
 - App ID **480**：项目根与 Build 目录各放 `steam_appid.txt`（内容 `480`）；
 - 邀请闭环：Host 创建 Steam Lobby → Overlay 好友邀请 → 接受后以 Lobby 内 SteamID 发起 P2P 连接（Lobby 仅作发现层，见第 3 节）；
 - README 测试步骤（必写）：
@@ -176,7 +176,7 @@ SharedBall (逻辑根: 同上)
 | **M1 联机骨架** | Boot/Room 场景、NetworkManager、玩家 Spawn、FPS 移动（非预测版） | 1h | 双客户端互见对方移动 |
 | **M2 物理球（核心）** | SharedBall 预测 + reconcile；玩家预测移动；弹回 | 1.5h | **双人同 Tick 对撞无严重错位** |
 | **M3 加分项四连** | 中途加入 / 主机退出 / 定时生成 / Tapped | 1h | 各验收点通过 |
-| **M4 Steam（P2-1）** | SteamworksSockets + Multiplexer + Lobby 邀请闭环（LAN-first 分层接入，见第 3 节） | 1h | 两台设备经 Steam 联机成功 |
+| **M4 Steam（P2-1）** | FishySteamworks + Multipass + Lobby 邀请闭环（LAN-first 分层接入，见第 3 节） | 1h | 两台设备经 Steam 联机成功 |
 | **M5 打磨提交** | Windows Build、README、规范自查、Git 历史检查 | 0.5h | 按题目要求可提交 |
 
 > 裁剪顺序（仅作超时应急，不做计划）：球上限优化 → UI/美术（不评分）；**M0-M4 绝不裁**（Steam 已定级必做）。美术资源替换不占里程碑（见 4.2 Prefab 层级纪律）。
@@ -190,7 +190,7 @@ Unity 版本：**6000.3.14f1**。
 | 包 | 用途 | 安装 |
 |----|------|------|
 | **FishNet 4** | 网络框架（预测/和解/RPC/Spawn） | git URL：`https://github.com/FirstGearGames/FishNet.git?path=/Assets/FishNet#4.7.3`（锁 tag 保证评审可复现） |
-| **SteamworksSockets** | Steam transport（M4 引入，必做） | git URL：`https://github.com/FirstGearGames/SteamworksSockets.git?path=/Assets/SteamworksSockets`（URL 变动以 FishNet 官方文档 Transport 章为准） |
+| **FishySteamworks** | Steam transport（M4 引入，必做） | 仓库：`https://github.com/FirstGearGames/FishySteamworks`（v4.1.1）。⚠️ 原写的 `SteamworksSockets?path=/Assets/SteamworksSockets` 是 404。该仓库非标准 UPM 布局 → **按官方 README 走 unitypackage 安装**（releases 页 → 导入 `Assets/Plugins/FishySteamworks/`）。另需单独装 **Steamworks.NET** + .NET 4.5x |
 | **FishySteamworks** | Steam transport 备选 | `https://github.com/FirstGearGames/FishySteamworks.git?path=/Assets/FishySteamworks` |
 | **ParrelSync** | 同机多开 Editor 测试 | `https://github.com/VeriorPies/ParrelSync.git?path=/ParrelSync#1.5.3`（原 JoinGame 仓库已不存在） |
 | URP | 渲染管线 | Unity 6 模板自带 |

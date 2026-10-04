@@ -296,11 +296,21 @@ M0 工程基线
 
 ---
 
-### [ ] M9 Steam 联机（P2-1，必做，最后做）
+### [~] M9 Steam 联机（P2-1，必做，最后做）—— 代码与包已就位，待 Editor 内跑一次接线工具 + 两设备联调
 
 **目标**：一个 Build 同时支持 LAN 与 Steam，好友可经 Steam 邀请入房。
 
-工作项：装 SteamworksSockets → **`Multipass`**（⚠️ AGENTS.md §5.8 写的 `TransportMultiplexer` 是错名，包内真实类名是 `Multipass`，菜单位置 `FishNet/Transport/Multipass`）挂 Tugboat + Steamworks → Host 建 Lobby → Overlay 邀请 → 从 Lobby 取 Host SteamID 发起 P2P；`steam_appid.txt = 480`（项目根 + Build 目录）。
+**⚠️ 两个文档错误已修正（2026-10-04）**：
+1. `AGENTS.md §3/§5.8` 的 **`FirstGearGames/SteamworksSockets?path=/Assets/SteamworksSockets` 是 404，仓库根本不存在**，包名也是错的。FishNet 官方 Steam transport 的真名是 **`FishySteamworks`**（`com.firstgeargames.fishysteamworks`，v4.1.1，出处：FishNet 主仓库 README）。
+2. **`TransportMultiplexer` 是错名**，包内真实类是 **`Multipass`**（`Runtime/Transporting/Transports/Multipass/Multipass.cs`，菜单 `FishNet/Transport/Multipass`）。
+
+**传输方案定案（2026-10-04）：用 Multipass 并存，不用编译宏、也不替换 Tugboat。**
+- 服务器侧 `GlobalServerActions = true`（默认）→ `StartConnection(server)` 遍历所有 transport 全部监听（Multipass.cs:826-851）→ 一局同时收 LAN 与 Steam 客户端。
+- 客户端侧必须先 `SetClientTransport`（Multipass.cs:64-89、846-849），重载支持按**基类 `Transport` 引用**指定（:613）→ Network 层只持有基类引用，**不必引用 Steam 包程序集**，包没装也能编译。
+- 连接 Id 由 Multipass 映射成 `MultipassId` 后交上层 → `ServerManager`/`ClientManager` 用法不变，**M0-M8 玩法代码零改动**（正好兑现「LAN-first 接入时游戏代码零改动」）。
+- **决定性依据**：FishySteamworks 官方 README「Testing Two Builds Locally」原文——Steam 不允许两个 build 自连，**单机两开测试必须用默认 transport**。替换掉 Tugboat 就等于废掉 ParrelSync 回路，M2/M4 的双人同 Tick 撞球用例再也没法回归。
+
+工作项：装 FishySteamworks（**unitypackage 方式**，非标准 UPM 布局）+ Steamworks.NET → `Multipass` 挂 Tugboat + FishySteamworks → Host 建 Lobby → Overlay 邀请 → 从 Lobby 取 Host SteamID 发起 P2P；`steam_appid.txt = 480`（项目根 + Build 目录）。
 **完成定义（T8）**：两台设备经 Steam Overlay 邀请联机成功。
 **前提/限制**：M4 已通过；单 Steam 账号无法自连 P2P，需**两个 Steam 账号 + 两台设备**（账号已具备，第二台设备待确认）。日常开发回路仍用 ParrelSync + LAN，Steam 只在 M9 集中联调。
 
@@ -308,8 +318,55 @@ M0 工程基线
 - 被邀请方**不需要先在大厅、也不需要先在游戏里**——但**必须有一条路能接住邀请**，二选一都要写：
   1. **对方游戏没在跑**：Steam 用 `steam://run/<appid>//<connect_string>` 拉起游戏，connect string 走**命令行**传给新进程 → 游戏启动时必须解析命令行（Steamworks.NET 的 `SteamApps.GetLaunchCommandLine()`，或直接 `System.Environment.GetCommandLineArgs()`）并据此直连。
   2. **对方游戏已经在跑**：Steam 不会新开进程，而是把邀请送给**现有进程**的回调（Lobby 邀请 = `GameLobbyJoinRequested_t { m_steamIDLobby, m_steamIDFriend }`；好友「加入游戏」= `GameRichPresenceJoinRequested_t`）→ 必须在进程内**注册并处理这些回调**，否则点了"加入"毫无反应（最常见的"邀请没反应"就是漏了这条）。
-- ⚠️ SteamworksSockets 的"地址"就是 **Host 的 SteamID**：邀请里带的 connect string 实际上就是 Host SteamID / LobbyID，客户端拿到后填给 transport 当地址。**具体 API 以包内 SteamworksSockets 示例为准，不要凭记忆写**。
+- ⚠️ FishySteamworks 的"地址"就是 **Host 的 SteamID64**（官方 README：填 transport 的 Client Address，或 `ClientManager.StartConnection(steamId64)`）。**具体 API 以包内实际类型为准，不要凭记忆写**。
+- ⚠️ **编译宏的正确用途只有一个**：把 Steamworks.NET 的 Steam API 调用（Lobby 创建、邀请回调、`SteamAPI.Init`）包在 `#if !DISABLESTEAMWORKS` 里，保证没装 Steamworks.NET 的机器也能编译。**不要用宏去区分 LAN/Steam 两套传输**——那是运行时的 `SetClientTransport`。
 - ⚠️ 两台机器都要登录 Steam 且当前账号能运行 AppID 480（否则 P2P 建不起来）。
+
+**实现记录（2026-10-04）**：
+
+包安装（都放 `Assets/Plugins/`，随 git 走，评审方可离线编译）：
+- `Assets/Plugins/FishySteamworks/`（v4.1.1，来自 `FirstGearGames/FishySteamworks` 的 `FishNet/Plugins/FishySteamworks`；已删掉自带的 `SteamManager.unitypackage`）。**无 asmdef → 编译进 `Assembly-CSharp-firstpass`**（顶层 `Plugins` 是 Unity 的 firstpass 特殊目录）。
+- `Assets/Plugins/Steamworks.NET/`（`com.rlabrecque.steamworks.net` 2025.165.0，自带 asmdef，GUID `68bd7fdb68ef2684e982e8a9825b18a5`，`autoReferenced=true` → firstpass 与 `SphereRoom.Steam` 都能直接用 `Steamworks` 命名空间）。
+- 项目根新增 `steam_appid.txt`（内容 `480`）。**Build 目录也要放一份，M10 打包时补**（或手工拷）。
+
+新增文件：
+| 文件 | 职责 |
+|------|------|
+| `Scripts/Steam/SphereRoom.Steam.asmdef` | 独立程序集，隔离 Steam 依赖 |
+| `Scripts/Steam/SteamBootstrap.cs` | `SteamAPI.Init()` / 每帧 `RunCallbacks()` / `Shutdown()`。**必须自己写**：FishySteamworks 内部 `InitializeRelayNetworkAccess()` 是 try/catch 静默失败，没有 Init 会表现为"能进房间但连不上" |
+| `Scripts/Steam/SteamLobbyInvite.cs` | 纯发现层：建 Lobby → Overlay 邀请；接住 4 条接收路径 |
+| `Scripts/Network/TransportKind.cs` | `Lan=0` / `Steam=1` |
+| `Scripts/Network/TransportSelector.cs` | **零类型依赖**：字段只用 FishNet 基类 `Transport`，所以 Network 程序集不需要引用 Steam 包 |
+| `Scripts/Core/Editor/SphereRoomSteamSetup.cs` | 菜单 `SphereRoom/Setup/M9 Steam 接线`（priority 11），幂等接线 |
+
+修改：`NetworkBootstrap`（新增 `_transportSelector` / `JoinGame(addr,kind)` / `JoinViaSteam(ulong)` / `TrySelectTransport`；`StartHost` 仍选 LAN 传输——**主机进程内的本地客户端不能走 Steam**，Steam 禁止自连 P2P）、`MainMenuUI`（新增 `_steamInviteButton` / `_steamInvite`，仅在"已联机 且 `SteamBootstrap.IsReady`"时显形）、`SphereRoom.UI.asmdef` 与 `SphereRoom.Core.Editor.asmdef`（加 `SphereRoom.Steam` 引用）。
+
+**邀请的 4 条接收路径（`SteamLobbyInvite` 全覆盖）**：
+| 场景 | 入口 | 处理 |
+|------|------|------|
+| 对方在游戏中 · Lobby 邀请 | `GameLobbyJoinRequested_t` | `JoinLobby` → `LobbyEnter_t` → `GetLobbyOwner` → 连 Host |
+| 对方在游戏中 · 好友列表「加入游戏」 | `GameRichPresenceJoinRequested_t` | parse connect → 连 Host |
+| 对方未启动 · Lobby 邀请 | 命令行 `+connect_lobby <lobbyid>` | 同上（**长键必须先匹配**：`+connect_lobby` 的前 8 字符就是 `+connect`） |
+| 对方未启动 · Rich Presence | 命令行 `+connect <steamid64>` | 直连 Host |
+
+配套在 Lobby 建好后 `SetRichPresence("connect", 本地SteamID)`，否则好友列表里根本没有「加入游戏」这一项（第 2、4 条路径会一直是死的）。
+
+**M9 运行步骤（给操作者）**：
+1. 让 Editor 重编译一次（关掉 Play 模式 / `Ctrl+R`）。首次会编译 `FishySteamworks`（无 asmdef → `Assembly-CSharp-firstpass`）与 `Steamworks.NET`。Console 必须 0 error。
+2. 菜单 **`SphereRoom/Setup/M9 Steam 接线（Multipass + FishySteamworks + 邀请）`** 点一次（幂等），它会自动：
+   - NetworkManager 上加 `FishySteamworks`（`_peerToPeer = true`）；
+   - 加 `Multipass`，`_transports = [Tugboat, FishySteamworks]`；
+   - `TransportManager.Transport` 指向 `Multipass`；
+   - 加 `TransportSelector` 并接到 `NetworkBootstrap._transportSelector`；
+   - 加 `SteamBootstrap` / `SteamLobbyInvite`（后者接到 `_bootstrap`）；
+   - 主菜单左上角「退出游戏」下方生成「邀请 Steam 好友」按钮并接到 `MainMenuUI`；
+   - 保存 Boot 场景。
+3. **先做 LAN 回归**（Tugboat 没被移除，ParrelSync 回路还在）：双开 → Host/Join → 跑 M2/M4 的双人同 Tick 撞球用例，确认 Multipass 接线没有破坏原有同步。
+4. **再做 Steam 两设备联调**：两台设备各登录**不同** Steam 账号、Steam 客户端在线、账号有 AppID 480 运行权限；A 建房间 → 点「邀请 Steam 好友」→ Overlay 选 B → B 接受。
+   - B 游戏没开 → Steam 拉起进程并带 `+connect_lobby <id>` → 自动进房；
+   - B 游戏已开 → `GameLobbyJoinRequested_t` 回调 → 自动进房。
+   - 日志看 `[Steam] 接受邀请，连接 Host SteamID = …`；连不上先查 `SteamAPI.Init()` 是否成功、两边 `steam_appid.txt` 是否存在。
+5. **已知限制**：单设备两开**无法**测 Steam（Steam 禁止自连 P2P，FishySteamworks README 明示）→ 本机回路一律用 Tugboat。打包时 `Build/` 目录也要放 `steam_appid.txt`（M10 补）。
 
 ---
 

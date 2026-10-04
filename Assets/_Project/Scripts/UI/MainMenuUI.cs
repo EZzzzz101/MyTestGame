@@ -1,5 +1,6 @@
 using SphereRoom.Core;
 using SphereRoom.Network;
+using SphereRoom.Steam;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -18,6 +19,12 @@ namespace SphereRoom.UI
         [SerializeField] private Button _leaveButton;
         [SerializeField] private Text _statusText;
 
+        [Tooltip("M9：Steam 邀请按钮（可选）。未接线时整个 Steam 入口静默隐藏，不影响 LAN。")]
+        [SerializeField] private Button _steamInviteButton;
+
+        [Tooltip("M9：Steam 邀请服务。为空时隐藏邀请按钮。")]
+        [SerializeField] private SteamLobbyInvite _steamInvite;
+
         private void Awake()
         {
             if (_hostButton != null)
@@ -26,6 +33,8 @@ namespace SphereRoom.UI
                 _joinButton.onClick.AddListener(OnJoinClicked);
             if (_leaveButton != null)
                 _leaveButton.onClick.AddListener(OnLeaveClicked);
+            if (_steamInviteButton != null)
+                _steamInviteButton.onClick.AddListener(OnSteamInviteClicked);
         }
 
         private void OnDestroy()
@@ -36,6 +45,8 @@ namespace SphereRoom.UI
                 _joinButton.onClick.RemoveListener(OnJoinClicked);
             if (_leaveButton != null)
                 _leaveButton.onClick.RemoveListener(OnLeaveClicked);
+            if (_steamInviteButton != null)
+                _steamInviteButton.onClick.RemoveListener(OnSteamInviteClicked);
         }
 
         private void OnEnable()
@@ -60,6 +71,14 @@ namespace SphereRoom.UI
             _bootstrap.JoinGame();
         }
 
+        // [仅本地 | 事件驱动（点击「邀请 Steam 好友」）] 建 Lobby 并弹出 Steam Overlay 邀请界面。
+        // 必须在房间已经建好之后点：好友接受邀请后会立刻连本机的 Host。
+        private void OnSteamInviteClicked()
+        {
+            if (_steamInvite != null)
+                _steamInvite.CreateLobbyAndInvite();
+        }
+
         // [仅本地 | 事件驱动（点击「退出游戏」）] 客户端与房主走同一条路，语义不同：
         // - 客户端：断开连接并卸载 Room → 回到大厅；
         // - 房主：StopConnection 会停掉服务器 = 房间解散，Room 里其余客户端收到掉线后由 RoomClosedUI 弹「房间已解散」。
@@ -80,6 +99,10 @@ namespace SphereRoom.UI
                 _menuPanel.SetActive(offline);
             if (_leaveButton != null)
                 _leaveButton.gameObject.SetActive(!offline);
+
+            // Steam 邀请只在「已联机 + Steam 真的可用」时出现：Steam 没跑时不给玩家一个点了没反应的按钮。
+            if (_steamInviteButton != null)
+                _steamInviteButton.gameObject.SetActive(!offline && _steamInvite != null && SteamBootstrap.IsReady);
 
             // 焦点跟随联机状态：进对局锁鼠标开始操作，回大厅把鼠标还给 UI。
             // 顺序有讲究：先开闸再切焦点，否则 SetMode(Gameplay) 会被 GameplayAllowed 挡掉。

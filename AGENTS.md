@@ -21,7 +21,7 @@
 | Unity 版本 | **6000.3.14f1**（评审方用此版本打开，不得使用其他版本特性） |
 | 渲染管线 | URP（一旦选定不得中途切换） |
 | 网络框架 | **FishNet 4**（不使用 Mirror / NGO / Photon / 自研 sockets） |
-| Transport | LAN：**Tugboat（UDP 系）**；Steam：**SteamworksSockets**（App ID 480） |
+| Transport | LAN：**Tugboat（UDP 系）**；Steam：**FishySteamworks**（App ID 480）。两者经 `Multipass` 并存，一个 Build 同时支持（见 §5.8） |
 | 拓扑 | Host-Client（一人 Host，其他 Join），无 Dedicated Server、无 Host Migration |
 | TickRate | 50 Hz；`Time.fixedDeltaTime = 0.02`（1 Tick = 1 物理步，完全对齐） |
 | 目标平台 | Windows Standalone x64 |
@@ -33,10 +33,16 @@
 manifest.json 需包含（git URL 安装，详见 DEVELOPMENT_PLAN.md 第 7 节）：
 
 - `FishNet`：`https://github.com/FirstGearGames/FishNet.git?path=/Assets/FishNet#4.7.3`（锁 tag，评审方可复现）
-- `SteamworksSockets`（仅 M9 Steam 里程碑引入）：`https://github.com/FirstGearGames/SteamworksSockets.git?path=/Assets/SteamworksSockets`
 - `ParrelSync`（编辑器多开测试）：`https://github.com/VeriorPies/ParrelSync.git?path=/ParrelSync#1.5.3`（**原 JoinGame 地址仓库已不存在，官方仓库为 VeriorPies**）
+- **FishySteamworks（仅 M9 Steam 里程碑引入）**：`https://github.com/FirstGearGames/FishySteamworks`（v4.1.1，2024-08）。
+  ⚠️ **本文档此前写的 `FirstGearGames/SteamworksSockets?path=/Assets/SteamworksSockets` 是 404，仓库不存在，包名也写错了**——FishNet 官方 Steam transport 的真实名字是 **FishySteamworks**（包名 `com.firstgeargames.fishysteamworks`），出处是 FishNet 主仓库 README：「FishySteamworks, a Steamworks transport: https://github.com/FirstGearGames/FishySteamworks/」。
+  ⚠️ 该仓库**不是标准 UPM 布局**（根目录同时有 `package.json` 与 `FishNet/` 文件夹，`?path=` 该填什么不确定）→ **按官方 README 走 unitypackage 安装**（releases 页下载 → 导入 `Assets/Plugins/FishySteamworks/`），不要赌 git URL 的 path 参数。
+  ⚠️ 它还**依赖 Steamworks.NET**（`https://github.com/rlabrecque/Steamworks.NET`，需单独装）与 **.NET 4.5x**。
+  ⚠️ 装包后**以包内 README / 实际类型名为准**（类名是否为 `FishySteamworks`、是否提供 `SteamManager` 等），本文档不臆断 API。
 
 Steam 路径需要：项目根与 Build 目录各放 `steam_appid.txt`，内容为 `480`。
+Steam 侧客户端地址 = **Host 的 SteamID64**（填 transport 的 Client Address，或 `ClientManager.StartConnection(steamId64)`）。
+**单机限制（官方 README 原文）**：Steam 不允许两个 build 自连，单机两开测试**必须用默认 transport（Tugboat）** → 这是必须保留 Tugboat、走 Multipass 并存的决定性理由。
 
 **API 参考优先级**：FishNet 官方文档（fish-networking.gitbook.io）> 包内 `Demos/` > 本文档。**预测代码以官方示例为骨架改造，不得凭记忆编写 API 调用**；若 API 与本文档描述有出入，以包内示例为准并在提交信息中注明。
 按用途选骨架：玩家移动与球体 reconcile-only 都用 `Demos/Prediction/Rigidbody`（场景 `Rigidbody Prediction Demo.unity`）。
@@ -113,9 +119,15 @@ Assets/
 - 不实现 Host Migration（README 说明取舍）。
 
 ### 5.8 Steam（最后做，必做）
-- `TransportMultiplexer` 同时挂 Tugboat + SteamworksSockets（一个 Build 同时支持 LAN 与 Steam）；
+- **用 `Multipass` 同时挂 Tugboat + FishySteamworks**（一个 Build 同时支持 LAN 与 Steam）。
+  ⚠️ 本文档此前写的 **`TransportMultiplexer` 是错名**，包内真实类是 **`Multipass`**（`Runtime/Transporting/Transports/Multipass/Multipass.cs`，菜单 `FishNet/Transport/Multipass`）。
+  - 服务器侧：`GlobalServerActions = true`（默认）时 `StartConnection(server)` 会**遍历所有 transport 全部启动监听**（Multipass.cs:826-851）→ 同一局同时接受 LAN 与 Steam 客户端。
+  - 客户端侧：**必须先 `SetClientTransport`** 指定用哪一个，否则 LogError 并失败（Multipass.cs:64-89、846-849）。重载支持按 **基类 `Transport` 引用** / 类型 / index 指定（Multipass.cs:575-638）。
+  - 连接 Id 由 Multipass 统一映射成 `MultipassId` 后交给上层（`_multpassIdLookup`）→ **`ServerManager` / `ClientManager` 用法完全不变，游戏玩法代码零改动**。
+- **传输方式的选择是"运行时"的，不是"编译期"的**：禁止用编译宏区分 LAN / Steam 两套构建（理由见 PROGRESS.md M9 节）。编译宏只允许用于隔离 **Steamworks.NET 的 Steam API 调用**（`#if !DISABLESTEAMWORKS`，Steamworks.NET 自带宏），两者不要混为一谈。
 - Lobby：Host 创建 → Steam Overlay 邀请 → 对方接受后以 Lobby 成员 SteamID 建立 P2P 连接；
-- `steam_appid.txt = 480`。
+- `steam_appid.txt = 480`；
+- 邀请必须覆盖两条接收路径（缺任一都会"点了加入没反应"）：① 对方游戏未运行 → Steam 拉起进程，connect string 走**命令行**，需启动时解析；② 对方游戏已运行 → 走 `GameLobbyJoinRequested_t` / `GameRichPresenceJoinRequested_t` **回调**。
 
 ### 5.9 表现层扩展点（换皮与音频）
 
@@ -145,7 +157,7 @@ Assets/
 - [ ] **T6 主机退出**：客户端提示 + 返回菜单 + 可重连。
 - [ ] **T7 定时生成**：Host Tick 计数每 15s 随机生成，上限 8。
 - [ ] **T8 Tapped**：服务器判定 + TargetRpc + UI。
-- [ ] **T9 Steam（P2-1 必做）**：SteamworksSockets + Multiplexer + Lobby 邀请。
+- [ ] **T9 Steam（P2-1 必做）**：FishySteamworks + Multipass + Lobby 邀请（两条接收路径都要覆盖）。
   前提：T4 物理核心验收通过后再做（LAN-first：游戏逻辑与 Steam 层解耦，接入时游戏代码零改动）。
   验收：两台设备经 Steam Overlay 联机成功。同机限制：单 Steam 账号无法自连 P2P，Steam 联调需两设备/两账号；日常开发回路用 ParrelSync + Tugboat LAN。
 - [ ] **T10 提交打包**：Windows Build、README（选型理由/运行步骤/Steam 测试步骤/已知限制）、按 CODING_STANDARDS 自查、Git 历史检查（无 squash）。
