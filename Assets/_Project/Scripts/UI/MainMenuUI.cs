@@ -1,3 +1,4 @@
+using SphereRoom.Core;
 using SphereRoom.Network;
 using UnityEngine;
 using UnityEngine.UI;
@@ -59,9 +60,14 @@ namespace SphereRoom.UI
             _bootstrap.JoinGame();
         }
 
+        // [仅本地 | 事件驱动（点击「退出游戏」）] 客户端与房主走同一条路，语义不同：
+        // - 客户端：断开连接并卸载 Room → 回到大厅；
+        // - 房主：StopConnection 会停掉服务器 = 房间解散，Room 里其余客户端收到掉线后由 RoomClosedUI 弹「房间已解散」。
+        // 必须走 ReturnToBoot 而不是 StopNetwork：Room 是叠加加载的全局场景，只断连接不会卸载，
+        // 残留的场景会一直渲染在主菜单背后。
         private void OnLeaveClicked()
         {
-            _bootstrap.StopNetwork();
+            _bootstrap.ReturnToBoot();
         }
 
         private void OnStatusChanged(NetworkMode mode, string text)
@@ -74,6 +80,15 @@ namespace SphereRoom.UI
                 _menuPanel.SetActive(offline);
             if (_leaveButton != null)
                 _leaveButton.gameObject.SetActive(!offline);
+
+            // 焦点跟随联机状态：进对局锁鼠标开始操作，回大厅把鼠标还给 UI。
+            // 顺序有讲究：先开闸再切焦点，否则 SetMode(Gameplay) 会被 GameplayAllowed 挡掉。
+            InputFocus focus = InputFocus.Instance;
+            if (focus == null)
+                return;
+
+            focus.GameplayAllowed = !offline;
+            focus.SetMode(offline ? InputFocusMode.Menu : InputFocusMode.Gameplay);
         }
     }
 }

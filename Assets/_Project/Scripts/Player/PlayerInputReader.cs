@@ -1,4 +1,5 @@
 using System;
+using SphereRoom.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -78,19 +79,21 @@ namespace SphereRoom.Player
             IsInputEnabled = false;
         }
 
-        /// <summary>[热路径] 采样移动输入（0-1 摇杆域），Tick 内调用。</summary>
+        /// <summary>[热路径] 采样移动输入（0-1 摇杆域），Tick 内调用。
+        /// 菜单焦点下返回零：鼠标已经交给 UI 了，此时不该还让人物乱走。</summary>
         public Vector2 ReadMove()
         {
-            if (!IsInputEnabled || _moveAction == null)
+            if (!IsInputEnabled || !InputFocus.IsGameplay || _moveAction == null)
                 return Vector2.zero;
 
             return _moveAction.ReadValue<Vector2>();
         }
 
-        /// <summary>[热路径] 采样视角输入（鼠标像素增量），Update 内调用。</summary>
+        /// <summary>[热路径] 采样视角输入（鼠标像素增量），Update 内调用。
+        /// 菜单焦点下返回零：这是"ESC 之后视角不要动"的落点——不采样就不累积，回到对局时也不会跳视角。</summary>
         public Vector2 ReadLook()
         {
-            if (!IsInputEnabled || _lookAction == null)
+            if (!IsInputEnabled || !InputFocus.IsGameplay || _lookAction == null)
                 return Vector2.zero;
 
             return _lookAction.ReadValue<Vector2>();

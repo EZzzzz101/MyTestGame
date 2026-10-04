@@ -274,13 +274,42 @@ M0 工程基线
 
 ---
 
+### [~] M8b 输入焦点与「退出游戏」（2026-10-04 新增，local 状态已落盘待验证）
+
+**目标**：ESC 把鼠标还给玩家（视角停住）、点画面回到对局；「退出游戏」客户端回大厅 / 房主解散房间。
+
+**根因（排查结论）**：
+- ⚠️ **ESC 从来没被处理过**：`CancelPressed` 的唯一订阅者是 `Player/PlayerMotor.cs`（M1 冻结类），而 Player 预制体上只有 `PlayerPredictedMotor` + `PlayerInputReader` + `PlayerIdentity` + `PlayerCamera`，**没有 PlayerMotor** → 那段代码是死代码。用户在编辑器里看到"鼠标出现"是 **Unity 编辑器自带的 ESC 解锁光标**，打包后不会出现，视角采样也没停 → "鼠标出来了但视角还在动"。
+- ⚠️ 「退出游戏」按钮接线本身没问题：Leave Button 是 Menu Canvas 的直接子物体（**不是** Menu Panel 的子物体，不会被 `_menuPanel.SetActive(false)` 一起藏掉）、Canvas 有 GraphicRaycaster、Button `m_Interactable: 1`、EventSystem 用的是 `InputSystemUIInputModule`。真正的问题是**没有任何代码在 ESC 后把 `Cursor.lockState` 交还给 UI**（`PlayerCamera.OnStartClient` 锁上后再没人解锁），于是按钮"看得见点不动"。
+
+**实现已落盘（待 Unity 内验证）**：
+- ✅ 新增 `Core/InputFocusMode.cs`（`Menu` / `Gameplay` 两态）+ `Core/InputFocus.cs`（场景级单例，Boot 场景新增 `Input Focus` 根节点）：
+  - ESC → `Menu`（单向：只交还鼠标，回对局靠点画面，避免反复横跳）；点画面（且**指针不在 UI 上**）→ `Gameplay`。
+  - `GameplayAllowed` 闸门由 UI 层按联机状态设置，**没有它会在大厅里点一下画面就把光标锁死，菜单按钮全点不到**。
+  - 焦点一变，光标状态（`Cursor.lockState` / `Cursor.visible`）与视角采样同时切换——两者必须同源，这是本节点存在的全部理由。
+  - 用 InputSystem 设备 API 直读（`Keyboard.current` / `Mouse.current`），不用 InputAction：本组件必须在玩家生成之前就能响应，不能依赖 `PlayerInputReader` 的生命周期。
+- ✅ `Player/PlayerInputReader.cs`（改）：`ReadMove` / `ReadLook` 在菜单焦点下返回零 → **视角不采样就不累积 yaw，回到对局时也不会跳视角**。
+- ✅ `UI/MainMenuUI.cs`（改）：`OnLeaveClicked` 由 `StopNetwork()` 改为 **`ReturnToBoot()`**——Room 是叠加加载的全局场景，只断连接不卸载会残留在主菜单背后；房主走同一条路，`ServerManager.StopConnection` 即解散房间，Room 内其余客户端经 `HostConnectionLost` 弹「房间已解散」。状态变化时同步焦点（先开 `GameplayAllowed` 闸、再 `SetMode`，顺序反了会被闸门挡掉）。
+- ✅ `Core/SphereRoom.Core.asmdef`（改）：补 `Unity.InputSystem` + `UnityEngine.UI`（`EventSystem.current.IsPointerOverGameObject()` 需要）两个引用。
+- ⏳ 待验证（local / Tugboat，ParrelSync 双开）：① 进房后按 ESC → 鼠标出现、移动鼠标视角不动；② 点画面 → 鼠标隐藏、视角恢复且不跳变；③ 点「退出游戏」→ 客户端回大厅（Room 卸载）、房主端房间解散且对方弹「房间已解散」面板 → 「返回大厅」可用；④ 大厅里点空白处**不会**把光标锁死。
+- 📌 遗留：`Player/PlayerMotor.cs`（M1 冻结类，含唯一的 `CancelPressed` 订阅）已是死代码，建议在 M10 自查时删除（连同预制体上可能残留的引用一起核对）。
+
+---
+
 ### [ ] M9 Steam 联机（P2-1，必做，最后做）
 
 **目标**：一个 Build 同时支持 LAN 与 Steam，好友可经 Steam 邀请入房。
 
-工作项：装 SteamworksSockets → `TransportMultiplexer` 挂 Tugboat + Steamworks → Host 建 Lobby → Overlay 邀请 → 从 Lobby 取 Host SteamID 发起 P2P；`steam_appid.txt = 480`（项目根 + Build 目录）。
+工作项：装 SteamworksSockets → **`Multipass`**（⚠️ AGENTS.md §5.8 写的 `TransportMultiplexer` 是错名，包内真实类名是 `Multipass`，菜单位置 `FishNet/Transport/Multipass`）挂 Tugboat + Steamworks → Host 建 Lobby → Overlay 邀请 → 从 Lobby 取 Host SteamID 发起 P2P；`steam_appid.txt = 480`（项目根 + Build 目录）。
 **完成定义（T8）**：两台设备经 Steam Overlay 邀请联机成功。
 **前提/限制**：M4 已通过；单 Steam 账号无法自连 P2P，需**两个 Steam 账号 + 两台设备**（账号已具备，第二台设备待确认）。日常开发回路仍用 ParrelSync + LAN，Steam 只在 M9 集中联调。
+
+**邀请的接收语义（2026-10-04 对齐，M9 实现时必须覆盖）**：
+- 被邀请方**不需要先在大厅、也不需要先在游戏里**——但**必须有一条路能接住邀请**，二选一都要写：
+  1. **对方游戏没在跑**：Steam 用 `steam://run/<appid>//<connect_string>` 拉起游戏，connect string 走**命令行**传给新进程 → 游戏启动时必须解析命令行（Steamworks.NET 的 `SteamApps.GetLaunchCommandLine()`，或直接 `System.Environment.GetCommandLineArgs()`）并据此直连。
+  2. **对方游戏已经在跑**：Steam 不会新开进程，而是把邀请送给**现有进程**的回调（Lobby 邀请 = `GameLobbyJoinRequested_t { m_steamIDLobby, m_steamIDFriend }`；好友「加入游戏」= `GameRichPresenceJoinRequested_t`）→ 必须在进程内**注册并处理这些回调**，否则点了"加入"毫无反应（最常见的"邀请没反应"就是漏了这条）。
+- ⚠️ SteamworksSockets 的"地址"就是 **Host 的 SteamID**：邀请里带的 connect string 实际上就是 Host SteamID / LobbyID，客户端拿到后填给 transport 当地址。**具体 API 以包内 SteamworksSockets 示例为准，不要凭记忆写**。
+- ⚠️ 两台机器都要登录 Steam 且当前账号能运行 AppID 480（否则 P2P 建不起来）。
 
 ---
 

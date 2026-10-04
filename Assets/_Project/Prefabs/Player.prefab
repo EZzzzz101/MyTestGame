@@ -208,7 +208,7 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours:
-  - {fileID: 5024225266301606937}
+  - {fileID: 0}
   - {fileID: 6400650492036641122}
   - {fileID: 4599389178806121297}
   - {fileID: 3420507768506036189}
@@ -301,10 +301,12 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 7610141440112010408}
   _networkObjectCache: {fileID: 7610141440112010408}
+  _tickCallbacks: 6
   _input: {fileID: 2161694379724549707}
   _camera: {fileID: 3420507768506036189}
-  _graphicRenderer: {fileID: 3840322521032938038}
   _moveSpeed: 6
+  _graphicRenderer: {fileID: 3840322521032938038}
+  _logMoveDiagnostics: 0
 --- !u!114 &4599389178806121297
 MonoBehaviour:
   m_ObjectHideFlags: 0
