@@ -12,6 +12,13 @@
 /[Mm]emoryCaptures/
 /[Rr]ecordings/
 
+# ==== 例外：Build/ 必须入库 ====
+# 交付要求明确写了「可运行的 Windows build 包放于 Build/ 目录」，所以这里撤销上面的忽略。
+# 体积已核对（2026-10-04）：Build/ 共 101 MB，最大单文件 UnityPlayer.dll 34.7 MB，
+# 都没有碰到 GitHub 的「单文件 100 MB」硬限制，直接提交是安全的。
+# ⚠️ 每次重新打包后要再 `git add Build/` 提交一次，否则仓库里的包会过期。
+!/[Bb]uild/
+
 # 资产的 .meta 必须入库（仅当对应资产被忽略时才忽略 meta）
 !/[Aa]ssets/**/*.meta
 
