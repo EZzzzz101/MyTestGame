@@ -35,6 +35,11 @@ namespace SphereRoom.Core.Editor
         [MenuItem("SphereRoom/Setup/M9 Steam 接线（Multipass + FishySteamworks + 邀请）", priority = 11)]
         public static void ApplySteamWiring()
         {
+            // Play 模式下跑这个工具会把 NetworkManager 从场景里永久抹掉，必须第一时间拦住。
+            // 机理见 EditorWiringGuard 的注释（2026-10-04 实测事故）。
+            if (!EditorWiringGuard.CanModifyScene("M9 Steam 接线"))
+                return;
+
             Type fishyType = FindFishySteamworksType();
             if (fishyType == null)
             {
@@ -97,10 +102,31 @@ namespace SphereRoom.Core.Editor
             }
             else
             {
+                Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
                 Button steamButton = EnsureSteamInviteButton(menu.transform);
                 SetObjectReference(menu, "_steamInviteButton", steamButton);
                 SetObjectReference(menu, "_steamInvite", invite);
                 steamButton.gameObject.SetActive(false);
+
+                // 地址输入框：放在 Menu Panel 里「加入房间」按钮正下方，只服务 LAN 直连——
+                // 填房主的内网 IP。必须挂在 Menu Panel 下（而不是 Menu Canvas 下），
+                // 否则联机后菜单面板隐藏、输入框还留在屏幕上。
+                Transform menuPanel = menu.transform.Find("Menu Panel");
+                if (menuPanel == null)
+                {
+                    Debug.LogWarning("[SphereRoom] 没找到 Menu Panel，地址输入框已跳过（不影响 Steam 接线）。");
+                }
+                else
+                {
+                    InputField addressInput = EnsureAddressInput(menuPanel, font);
+                    SetObjectReference(menu, "_addressInput", addressInput);
+                }
+
+                // 创建房间后给房主看本机内网 IP（显隐由 MainMenuUI 控制，挂 Menu Canvas 左上角）。
+                Text lanHint = EnsureLanHint(menu.transform, font);
+                SetObjectReference(menu, "_lanHint", lanHint);
+                lanHint.gameObject.SetActive(false);
             }
 
             EditorSceneManager.SaveScene(scene);
@@ -207,6 +233,129 @@ namespace SphereRoom.Core.Editor
             label.alignment = TextAnchor.MiddleCenter;
 
             return go.GetComponent<Button>();
+        }
+
+        /// <summary>
+        /// 复用或创建地址输入框：Menu Panel 内，「加入房间」按钮正下方（Join 在 y=-40 高 52 → 输入框 y=-96 高 44）。
+        /// 只服务 LAN 直连——填房主的内网 IP（房主创建房间后左上角会显示自己的 IP）。
+        /// Steam 联机不走这里：局内「邀请 Steam 好友」按钮直接走 Overlay，好友不用手输任何东西。
+        /// 幂等：已有则只刷新文案与布局，不会挂第二份。
+        /// </summary>
+        private static InputField EnsureAddressInput(Transform menuPanel, Font font)
+        {
+            // 布局前提：Menu Panel 原高 280，Status Text 在 y=-105。
+            // 塞进一个 44 高的输入框必须腾地方，否则会压住 Status Text（-85~-125）。
+            // 做法：面板加高到 340（±170），Status Text 下移到 -145（-125~-165），输入框落在两者之间。
+            EnsureAddressInputLayout(menuPanel);
+
+            Transform existing = menuPanel.Find("Address Input");
+            if (existing != null)
+            {
+                InputField existingField = existing.GetComponent<InputField>();
+                if (existingField != null)
+                    return existingField;
+            }
+
+            GameObject go = new GameObject("Address Input", typeof(RectTransform), typeof(Image), typeof(InputField));
+            go.transform.SetParent(menuPanel, false);
+
+            RectTransform rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(0f, -96f);
+            rt.sizeDelta = new Vector2(360f, 44f);
+
+            Image background = go.GetComponent<Image>();
+            background.color = new Color(0.12f, 0.12f, 0.14f, 1f);
+
+            Text text = CreateInputChildText(go.transform, "Text", font, Color.white, 20);
+            Text placeholder = CreateInputChildText(go.transform, "Placeholder", font, new Color(0.62f, 0.62f, 0.65f, 1f), 18);
+            placeholder.text = "主机内网 IP（如 192.168.1.23）";
+
+            InputField field = go.GetComponent<InputField>();
+            field.targetGraphic = background;
+            field.textComponent = text;
+            field.placeholder = placeholder;
+            field.lineType = InputField.LineType.SingleLine;
+            field.contentType = InputField.ContentType.Standard;
+            return field;
+        }
+
+        /// <summary>
+        /// [编辑器 | 接线时] 给地址框腾地方：Menu Panel 高度 280 → 340，Status Text 从 -105 下移到 -145。
+        /// 幂等：判断的是当前尺寸/坐标，重复执行不会把面板越撑越大。
+        /// </summary>
+        private static void EnsureAddressInputLayout(Transform menuPanel)
+        {
+            RectTransform panelRt = menuPanel.GetComponent<RectTransform>();
+            if (panelRt != null && panelRt.sizeDelta.y < 340f)
+                panelRt.sizeDelta = new Vector2(panelRt.sizeDelta.x, 340f);
+
+            Transform statusText = menuPanel.Find("Status Text");
+            if (statusText == null)
+                return;
+
+            RectTransform statusRt = statusText.GetComponent<RectTransform>();
+            if (statusRt != null && statusRt.anchoredPosition.y > -145f)
+                statusRt.anchoredPosition = new Vector2(statusRt.anchoredPosition.x, -145f);
+        }
+
+        /// <summary>InputField 的文本 / 占位符子物体：铺满父级并左右留 12px 内边距。</summary>
+        private static Text CreateInputChildText(Transform parent, string name, Font font, Color color, int fontSize)
+        {
+            GameObject child = new GameObject(name, typeof(RectTransform), typeof(Text));
+            child.transform.SetParent(parent, false);
+
+            RectTransform rt = child.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(12f, 4f);
+            rt.offsetMax = new Vector2(-12f, -4f);
+
+            Text label = child.GetComponent<Text>();
+            label.font = font;
+            label.fontSize = fontSize;
+            label.color = color;
+            label.alignment = TextAnchor.MiddleLeft;
+            label.supportRichText = false;
+            return label;
+        }
+
+        /// <summary>
+        /// 复用或创建「本机内网 IP」提示文字：Menu Canvas 左上角，「Steam 邀请」那一列的下方 y=-204。
+        /// 创建房间后由 <see cref="MainMenuUI"/> 显示，房主照着把 IP 发给同一内网的好友（免 Steam 直连）。
+        /// 挂在 Menu Canvas（不是 Menu Panel）下：联机后菜单面板会隐藏，但房主此刻正需要看这行字。
+        /// </summary>
+        private static Text EnsureLanHint(Transform parent, Font font)
+        {
+            Transform existing = parent.Find("Lan Hint");
+            if (existing != null)
+            {
+                Text existingText = existing.GetComponent<Text>();
+                if (existingText != null)
+                    return existingText;
+            }
+
+            GameObject go = new GameObject("Lan Hint", typeof(RectTransform), typeof(Text));
+            go.transform.SetParent(parent, false);
+
+            RectTransform rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(24f, -204f);
+            rt.sizeDelta = new Vector2(420f, 64f);
+
+            Text label = go.GetComponent<Text>();
+            label.font = font;
+            label.fontSize = 16;
+            label.color = new Color(0.6f, 0.85f, 1f, 1f);
+            label.alignment = TextAnchor.UpperLeft;
+            label.supportRichText = false;
+            label.raycastTarget = false;
+            return label;
         }
 
         /// <summary>写私有 / 公有序列化字段（对象引用）。沿用 SphereRoomSetup 的做法。</summary>

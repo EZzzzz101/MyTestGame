@@ -25,6 +25,12 @@ namespace SphereRoom.UI
         [Tooltip("M9：Steam 邀请服务。为空时隐藏邀请按钮。")]
         [SerializeField] private SteamLobbyInvite _steamInvite;
 
+        [Tooltip("地址输入框（菜单面板内，「加入房间」按钮下方）。只用于 LAN 直连：填房主的内网 IP，留空则连 127.0.0.1 本机。")]
+        [SerializeField] private InputField _addressInput;
+
+        [Tooltip("创建房间后显示本机内网 IP，同一内网的好友填进地址框即可免 Steam 直连。未接线时整体隐藏。")]
+        [SerializeField] private Text _lanHint;
+
         private void Awake()
         {
             if (_hostButton != null)
@@ -35,6 +41,16 @@ namespace SphereRoom.UI
                 _leaveButton.onClick.AddListener(OnLeaveClicked);
             if (_steamInviteButton != null)
                 _steamInviteButton.onClick.AddListener(OnSteamInviteClicked);
+
+            // 地址输入框接线后，按钮上写死的「(127.0.0.1)」后缀就不成立了——
+            // 真正连哪儿以输入框内容为准，留着只会让人以为只支持回环。
+            // 未接线时不动它：那种情况下确实只能连 Inspector 里的默认地址。
+            if (_addressInput != null && _joinButton != null)
+            {
+                Text joinLabel = _joinButton.GetComponentInChildren<Text>();
+                if (joinLabel != null)
+                    joinLabel.text = "加入房间";
+            }
         }
 
         private void OnDestroy()
@@ -66,9 +82,19 @@ namespace SphereRoom.UI
             _bootstrap.StartHost();
         }
 
+        // [仅本地 | 事件驱动（点击「加入房间」）] 地址框留空 → 连 Inspector 默认地址（127.0.0.1，本机 ParrelSync 对开回归用）；
+        // 填了 → 走 LAN 直连那个地址（房主创建房间后左上角会显示自己的内网 IP）。
+        // 只在点击时读一次文本，不在每帧路径上。
         private void OnJoinClicked()
         {
-            _bootstrap.JoinGame();
+            string address = _addressInput != null ? _addressInput.text.Trim() : string.Empty;
+            if (address.Length == 0)
+            {
+                _bootstrap.JoinGame();
+                return;
+            }
+
+            _bootstrap.JoinGame(address, TransportKind.Lan);
         }
 
         // [仅本地 | 事件驱动（点击「邀请 Steam 好友」）] 建 Lobby 并弹出 Steam Overlay 邀请界面。
@@ -103,6 +129,17 @@ namespace SphereRoom.UI
             // Steam 邀请只在「已联机 + Steam 真的可用」时出现：Steam 没跑时不给玩家一个点了没反应的按钮。
             if (_steamInviteButton != null)
                 _steamInviteButton.gameObject.SetActive(!offline && _steamInvite != null && SteamBootstrap.IsReady);
+
+            // 主机视角的 LAN 提示：房主建好房间后菜单面板已隐藏，此刻正是他要把 IP 发给好友的时候，
+            // 所以这行字挂在对局中仍可见的 Menu Canvas 上（与「退出游戏」同一层）。
+            // 免 Steam：同一内网的好友把这个 IP 填进地址框就能进。
+            if (_lanHint != null)
+            {
+                bool showLanHint = mode == NetworkMode.Host;
+                _lanHint.gameObject.SetActive(showLanHint);
+                if (showLanHint)
+                    _lanHint.text = $"本机内网 IP：{LanIpProbe.PreferredAddress}\n同一内网的好友把它填进地址框点「加入房间」即可（无需 Steam）";
+            }
 
             // 焦点跟随联机状态：进对局锁鼠标开始操作，回大厅把鼠标还给 UI。
             // 顺序有讲究：先开闸再切焦点，否则 SetMode(Gameplay) 会被 GameplayAllowed 挡掉。

@@ -55,6 +55,9 @@ namespace SphereRoom.Core.Editor
         [MenuItem("SphereRoom/Setup/一键重建（预制体 + Boot/Room 场景）", priority = 0)]
         public static void RebuildAll()
         {
+            if (!EditorWiringGuard.CanModifyScene("一键重建"))
+                return;
+
             NetworkObject ballPrefab = BuildSharedBallPrefab();
             NetworkObject playerPrefab = BuildPlayerPrefab();
             BuildRoomScene(ballPrefab);
@@ -90,6 +93,9 @@ namespace SphereRoom.Core.Editor
         [MenuItem("SphereRoom/Setup/仅重建场景（Boot + Room）", priority = 21)]
         public static void RebuildScenesOnly()
         {
+            if (!EditorWiringGuard.CanModifyScene("仅重建场景"))
+                return;
+
             GameObject playerAsset = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
             GameObject ballAsset = AssetDatabase.LoadAssetAtPath<GameObject>(BallPrefabPath);
             if (playerAsset == null || ballAsset == null)
@@ -114,6 +120,9 @@ namespace SphereRoom.Core.Editor
         [MenuItem("SphereRoom/Setup/M5+M6 增量接线（进入退出提示 + 音效 + 房间解散）", priority = 10)]
         public static void ApplyM5M6Increment()
         {
+            if (!EditorWiringGuard.CanModifyScene("M5+M6 增量接线"))
+                return;
+
             AudioClip presenceClip = AssetDatabase.LoadAssetAtPath<AudioClip>(PresenceClipPath);
             AudioClip kickClip = AssetDatabase.LoadAssetAtPath<AudioClip>(KickClipPath);
             if (presenceClip == null || kickClip == null)
